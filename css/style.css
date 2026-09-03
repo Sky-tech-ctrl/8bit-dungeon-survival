@@ -480,50 +480,47 @@ body:not(.mobile-mode) #virtualPad {
 
 #joyBase {
   position: absolute;
-  /* 使用 clamp() 让摇杆在小屏幕上自动收缩 + 安全内边距，避免贴边/出屏 */
-  --joy-size: clamp(120px, 30vmin, 240px);
-  bottom: clamp(16px, 4vmin, 36px);
-  left:   clamp(16px, 4vmin, 36px);
-  width:  var(--joy-size);
-  height: var(--joy-size);
+  /* 物理左下：竖握手机时左手拇指的自然位置 */
+  bottom: 24px;
+  left:   24px;
+  width:  180px;
+  height: 180px;
   border-radius: 50%;
-  background: rgba(40,40,60,0.6);
+  background: rgba(40,40,60,0.62);
   border: 4px solid rgba(180,180,255,0.5);
-  box-shadow: inset 0 0 30px rgba(120,180,255,0.2), 0 0 24px rgba(120,180,255,0.15);
+  box-shadow: inset 0 0 24px rgba(120,180,255,0.2), 0 0 20px rgba(120,180,255,0.18);
   pointer-events: auto;
   touch-action: none;
 }
 #joyStick {
   position: absolute;
   top: 50%; left: 50%;
-  --stick-size: calc(var(--joy-size) * 0.44);
-  width:  var(--stick-size);
-  height: var(--stick-size);
-  margin-left: calc(var(--stick-size) / -2);
-  margin-top:  calc(var(--stick-size) / -2);
+  width:  80px;
+  height: 80px;
+  margin-left: -40px;
+  margin-top:  -40px;
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, #b8e4ff, #48b3ff 60%, #2578cf);
   border: 4px solid #c7e6ff;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+  box-shadow: 0 5px 16px rgba(0,0,0,0.55);
 }
 
 #attackBtn {
   position: absolute;
-  /* 攻击键默认放右上角：手机端横屏旋转 90° 后，对应拇指自然触达区（物理右下） */
-  --atk-size: clamp(100px, 26vmin, 180px);
-  top:    clamp(16px, 4vmin, 40px);
-  right:  clamp(16px, 4vmin, 40px);
-  width:  var(--atk-size);
-  height: var(--atk-size);
+  /* 物理右下：竖握手机时右手拇指的自然触达位置 */
+  bottom: 24px;
+  right:  24px;
+  width:  140px;
+  height: 140px;
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, #ffc8c8, #e0603f 60%, #b02020);
   border: 5px solid #ffa0a0;
   color: #fff;
-  font-size: calc(var(--atk-size) * 0.44);
+  font-size: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 28px rgba(255,80,80,0.55), 0 0 30px rgba(255,80,80,0.25);
+  box-shadow: 0 7px 24px rgba(255,80,80,0.55), 0 0 24px rgba(255,80,80,0.25);
   pointer-events: auto;
   touch-action: none;
   user-select: none;
@@ -531,7 +528,7 @@ body:not(.mobile-mode) #virtualPad {
 }
 #attackBtn:active { transform: scale(0.94); filter: brightness(1.2); }
 
-/* 手机横屏旋转之后，物理左下=画面左下，物理右上=画面右下，摇杆/攻击键都在拇指区 */
+/* 手机横屏旋转之后：物理左下=摇杆、物理右下=攻击键 —— 双手持机正好落在两个拇指上 */
 
 /* ==================== 消息日志 ==================== */
 #messageLog {
