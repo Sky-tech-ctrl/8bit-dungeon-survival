@@ -239,18 +239,25 @@ class Game {
       this.deviceMode = isMobile ? 'mobile' : 'pc';
     }
 
-    // 同步更新 overlay 里的设备按钮状态（防止后续进入 overlay 路径不一致）
+    // ① 先绑定 overlay 设备选择回调（click 才能正确触发 setDevice → 改 vpad 可见性）
+    this.setupDeviceSelect();
+    this.setupInput();
+    this.buildUI();
+
+    // ② 同步 overlay 里的设备按钮状态（此时 setDevice 已绑定，click 会生效）
     const pcBtn = document.querySelector('#deviceSelect [data-device=pc]');
     const mobileBtn = document.querySelector('#deviceSelect [data-device=mobile]');
     if (pcBtn && mobileBtn) {
       if (this.deviceMode === 'mobile') mobileBtn.click(); else pcBtn.click();
     }
 
-    this.setupDeviceSelect();
-    this.setupInput();
-    this.buildUI();
+    // ③ 兜底：无论 overlay 按钮是否存在，按最终设备模式强设虚拟按键可见性（避免消失）
+    const vpad = document.getElementById('virtualPad');
+    if (vpad) {
+      vpad.style.display = (this.deviceMode === 'mobile') ? 'block' : 'none';
+    }
 
-    // 应用设备模式
+    // 应用设备模式（canvas 尺寸/旋转、响应式）
     if (typeof this.applyDeviceMode === 'function') this.applyDeviceMode();
 
     const overlay = document.getElementById('overlay');
