@@ -160,95 +160,110 @@ canvas {
 
 .stat { display: flex; align-items: center; gap: 8px; }
 
-/* ==================== 建造菜单（弹窗式） ==================== */
+/* ==================== 建造菜单（弹窗式 · 正方形紧凑布局） ==================== */
 #buildMenu {
   position: absolute;
-  bottom: 10px;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 30px;
+  transform: translate(-50%, -50%);
   z-index: 30;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-content: flex-start;
-  max-width: 96%;
-  max-height: 88%;
-  overflow-y: auto;
-  background: rgba(0,0,0,0.9);
-  border: 15px solid #555;
-  padding: 40px 50px;
-  border-radius: 10px;
+  max-width: 97%;
+  max-height: 97%;
+  overflow: auto;
+  background: rgba(10, 10, 14, 0.96);
+  border: 6px solid #555;
+  padding: 14px;
+  border-radius: 8px;
+  box-shadow: 0 0 30px rgba(80, 160, 255, 0.25), inset 0 0 40px rgba(0,0,0,0.6);
+}
+
+/* 只有建造选择弹窗才启用 4 列正方形网格布局
+   画布 960×720 → 菜单设为 680×620，内容区约 640×580：
+   4 列 × 3 行按钮 → 每格约 154×169，接近正方形 ✅ 全部 10 个房间一屏显示 */
+#buildMenu.build-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: auto repeat(3, 1fr);
+  gap: 8px;
+  width: 680px;
+  height: 620px;
+  overflow: hidden;
 }
 
 /* 弹窗为空时不显示 */
 #buildMenu:empty { display: none; }
 
 .build-popup-title {
-  width: 100%;
+  grid-column: 1 / -1;   /* 标题独占一整行 */
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 30px 40px;
-  margin-bottom: 20px;
-  border-bottom: 10px dashed #555;
+  padding: 6px 10px 10px;
+  border-bottom: 3px dashed #555;
   color: #ffcc44;
-  font-size: 65px;
+  font-size: 16px;
   font-weight: bold;
-  text-shadow: 4px 4px 0 #000;
+  text-shadow: 2px 2px 0 #000;
+  letter-spacing: 1px;
 }
 
 .close-popup {
   background: #3a1a1a;
   color: #fff;
-  border: 10px solid #855;
-  padding: 10px 40px;
+  border: 2px solid #855;
+  padding: 3px 12px;
   cursor: pointer;
   font-family: inherit;
-  font-size: 60px;
+  font-size: 14px;
   font-weight: bold;
-  text-shadow: 3px 3px 0 #000;
-  border-radius: 6px;
+  text-shadow: 1px 1px 0 #000;
+  border-radius: 4px;
+  line-height: 1;
 }
 .close-popup:hover { background: #5a2a2a; border-color: #f88; }
 
-/* ========== 建造房间按钮 ≈ 放大到原来的 5 倍 ========== */
-/* 原基础（v29电脑端）：min-width 200 / min-height 120 / font 20 / icon 42 / cost 16
-   × 5 后：                          1000 / 600 / 100 / 210 / 80 */
+/* ========== 建造房间按钮 · 紧凑正方形卡片 ========== */
 .build-btn {
   background: #2a2a2a;
-  border: 20px solid #555;
+  border: 3px solid #555;
   color: #fff;
-  padding: 90px 150px;
+  padding: 6px 4px;
   font-family: 'Courier New', monospace;
-  font-size: 100px;
+  font-size: 13px;
   cursor: pointer;
   text-align: center;
-  min-width: 1000px;
-  min-height: 600px;
-  max-width: 95%;
-  transition: all 0.1s;
-  text-shadow: 10px 10px 0 #000;
-  flex-shrink: 0;
+  width: 100%;          /* 完全填满所在的 Grid 单元格 */
+  height: 100%;
+  box-sizing: border-box;
+  transition: all 0.12s;
+  text-shadow: 1px 1px 0 #000;
   font-weight: bold;
-  border-radius: 10px;
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;        /* 允许 Grid 压缩子元素 */
+  min-height: 0;
 }
 
 .build-btn:hover:not(:disabled):not(.no-space) {
   background: #3a5a3a;
   border-color: #8f8;
-  transform: translateY(-10px);
+  transform: translateY(-3px);
+  box-shadow: 0 4px 14px rgba(136, 255, 136, 0.35);
 }
 
 .build-btn.active {
   background: #5a3a3a;
   border-color: #f88;
-  box-shadow: 0 0 80px #f55, inset 0 0 40px rgba(255,80,80,0.2);
+  box-shadow: 0 0 16px #f55, inset 0 0 14px rgba(255,80,80,0.2);
 }
 
 .build-btn:disabled,
 .build-btn.no-space {
-  opacity: 0.4;
+  opacity: 0.42;
   cursor: not-allowed;
 }
 
@@ -256,32 +271,30 @@ canvas {
 .build-btn.no-space::after {
   content: '空间不足';
   position: absolute;
-  bottom: -90px;
+  bottom: -16px;
   left: 50%;
   transform: translateX(-50%);
   color: #f88;
-  font-size: 65px;
+  font-size: 10px;
   white-space: nowrap;
-  text-shadow: 3px 3px 0 #000;
+  text-shadow: 1px 1px 0 #000;
   font-weight: bold;
+  z-index: 2;
 }
 
 .build-btn .cost {
   color: #ffcc44;
-  font-size: 80px;
-  margin-top: 30px;
+  font-size: 10px;
   font-weight: bold;
-  text-shadow: 5px 5px 0 #000;
+  text-shadow: 1px 1px 0 #000;
   display: block;
   line-height: 1.1;
 }
 
 .build-btn .icon {
-  font-size: 210px;
-  margin-bottom: 40px;
-  display: block;
+  font-size: 30px;
   line-height: 1;
-  filter: drop-shadow(6px 6px 0 rgba(0,0,0,0.7));
+  filter: drop-shadow(2px 2px 0 rgba(0,0,0,0.7));
 }
 
 /* 铁匠铺升级面板 */

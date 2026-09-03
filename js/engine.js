@@ -475,12 +475,14 @@ class Game {
     this.buildPopup = null;
     this.selectedBuild = null;
     const menu = document.getElementById('buildMenu');
+    menu.classList.remove('build-grid');  // 关闭时移除网格标记，避免房间/铁匠铺弹窗被切碎
     menu.innerHTML = '';
   }
 
   // 动态构造建造按钮
   renderBuildMenu(col, row) {
     const menu = document.getElementById('buildMenu');
+    menu.classList.add('build-grid');   // ▼ 建造选择 → 开启 4 列正方形网格
     menu.innerHTML = '';
     const header = document.createElement('div');
     header.className = 'build-popup-title';
@@ -628,6 +630,7 @@ class Game {
     }
     const use = ROOM_USE[room.type];
     const menu = document.getElementById('buildMenu');
+    menu.classList.remove('build-grid');  // 房间功能弹窗 → 切回普通块级布局
     let html = `<div class="build-popup-title">
       <span>${room.typeData.icon} ${room.typeData.name}</span>
       <button class="close-popup" onclick="game.hideBuildPopup()">✕</button>
@@ -682,6 +685,7 @@ class Game {
 
   showBlacksmithDialog() {
     const menu = document.getElementById('buildMenu');
+    menu.classList.remove('build-grid');  // 铁匠铺弹窗 → 切回普通块级布局
     const nextLv = this.playerLevel + 1;
     const current = BLACKSMITH_UPGRADES[this.playerLevel - 1];
     let html = `<div class="build-popup-title">
