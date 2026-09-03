@@ -423,15 +423,12 @@ Game.prototype.drawRoom = function(ctx, room) {
   ctx.save();
   ctx.translate(rx+rw/2, ry+rh/2);
   const tex = this.assets.get(room.type);
-  if (tex && tex.naturalWidth > 0) {
+  if (tex) {
     ctx.imageSmoothingEnabled = false;
     try {
       // 仅绘制在墙内空心矩形中（不覆盖墙）
       ctx.drawImage(tex, -(fw/2), -(fh/2), fw, fh);
-    } catch(e) {
-      // 贴图绘制失败时，用代码 fallback 补上内饰，不留下空房间
-      this.drawRoomInterior(ctx, room.type, td, fw, fh);
-    }
+    } catch(e) {}
     ctx.restore();
   } else {
     this.drawRoomInterior(ctx, room.type, td, fw, fh);
@@ -641,12 +638,17 @@ Game.prototype.drawPlayer = function(ctx, p) {
   }
 
   // 精灵图（若已加载）—— 3 帧横向排列：idle(0) walk(1) attack(2)
-  // 8-bit NES 风格单帧 54×108，角色完全填满帧 → 无需 FRAME_BBOX 裁剪，直接全帧绘制
   const spr = this.assets.get('player_sprite');
   if (spr) {
     const frames = 3;
     const fw = spr.naturalWidth / frames;
-    const fh = spr.naturalHeight;
+    // 每帧的实际内容边界框（代码生成的 8-bit 玩家，确保头发/腰带/腕带完整）
+    // frame: [srcX(相对帧起点), srcY, srcW, srcH]
+    const FRAME_BBOX = [
+      [108, 40, 47, 113],  // frame0 idle (ratio 0.613)
+      [364, 40, 47, 113],  // frame1 walk (ratio 0.633)
+      [603, 40, 61, 100],  // frame2 attack (剑伸出宽 ratio 0.685)
+    ];
     // 选帧：攻击动画时 → frame 2；走动中 → frame 1；否则 frame 0
     let fi = 0;
     if (p.attackAnim > 0.3) fi = 2;
@@ -655,21 +657,20 @@ Game.prototype.drawPlayer = function(ctx, p) {
               this.input.keys['KeyA']||this.input.keys['KeyD']||
               this.input.keys['KeyW']||this.input.keys['KeyS']||
               this.input.keys['ArrowUp']||this.input.keys['ArrowDown'])) fi = 1;
-    // 目标尺寸：脚与地面线对齐 → 绘制高度 40px
-    // 新帧 80:108（武器完整入帧的宽幅玩家），默认 targetW = 40*80/108 ≈ 30；
-    // 攻击帧挥剑伸在角色右侧，向左翻时不要把剑"切掉"——这里 drawImage 已经按全帧绘制，不裁剪，OK。
+    const bb = FRAME_BBOX[fi];
+    // 目标尺寸：用户要求缩小玩家体型（马里奥比例）绘制高度 36px
     const groundContactY = p.inBasement ? Math.min(H - 6, p.y + 10) : GROUND_Y - 3;
-    const targetH = 40;
-    const targetW = Math.round(targetH * (fw / fh));
+    const targetH = 36;
+    const targetW = Math.round(targetH * (bb[2] / bb[3]));
     const drawTopY = groundContactY - targetH + 2;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     if (p.facing < 0) {
       ctx.translate(x, drawTopY);
       ctx.scale(-1, 1);
-      ctx.drawImage(spr, fi*fw, 0, fw, fh, -targetW/2, 0, targetW, targetH);
+      ctx.drawImage(spr, fi*fw + bb[0], bb[1], bb[2], bb[3], -targetW/2, 0, targetW, targetH);
     } else {
-      ctx.drawImage(spr, fi*fw, 0, fw, fh, x - targetW/2, drawTopY, targetW, targetH);
+      ctx.drawImage(spr, fi*fw + bb[0], bb[1], bb[2], bb[3], x - targetW/2, drawTopY, targetW, targetH);
     }
     ctx.restore();
   }
@@ -855,15 +856,13 @@ Game.prototype.drawSoldier = function(ctx, s) {
   // 精灵图（3 帧 idle/walk/shoot）
   const sspr = this.assets.get('soldier_sprite');
   if (sspr) {
-    // 新帧 80×96：枪 100% 入帧；按 th=60 计算 tw ≈ 60*80/96 = 50（稍宽，枪口闪光仍在正确位置）
     const frames = 3;
     const fw = sspr.naturalWidth / frames;
     const fh = sspr.naturalHeight;
     let fi = 0;
     if (shoot > 0.4) fi = 2;
     else if (Math.abs(s.x - (s.targetX||s.x)) > 2) fi = 1;
-    const th = 60;
-    const tw = Math.round(th * (fw / fh));
+    const tw = 34, th = 60;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     // 士兵面朝丧尸方向（与丧尸相反）
@@ -941,17 +940,13 @@ Game.prototype.drawZombie = function(ctx, z) {
   const zombieFh = zspr ? zspr.naturalHeight : 0;
   const spriteValid = !!(zspr && zombieFw >= 10 && zombieFw <= 200 && zombieFh >= 10 && zombieFh <= 200);
   if (spriteValid) {
-    // PVZ 风丧尸：新帧 72×128，按地面接触点缩放；原来的 tw=32/th=66（接近 1:2，新帧 72:128≈0.5625）
-    // 保持 th=66 保证视觉高度不变，tw 自动按 fw/fh 比例放大 → ≈ 66*72/128 ≈ 37
     const frames = 3;
     const fw = zombieFw;
     const fh = zombieFh;
     let fi = 0;
     if (z.attackAnim > 0.4) fi = 2;
     else if (Math.abs(z.walkAnim) > 0.3) fi = 1;
-    const th = 66;
-    const tw = Math.round(th * (fw / fh));
-    const drawX = -tw/2, drawY = -th+10;
+    const tw = 32, th = 66;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     // 丧尸朝 DOOR_X 走（面朝中央）
@@ -959,18 +954,7 @@ Game.prototype.drawZombie = function(ctx, z) {
     if (!faceRight) {
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(zspr, fi*fw, 0, fw, fh, drawX, drawY, tw, th);
-    // ===== 类型颜色叠加染色（保留像素透明） =====
-    // fast → 翠绿滤镜, tank → 暗紫滤镜, 普通/默认不染
-    let tint = null;
-    if (z.type === 'fast') tint = 'rgba(60, 220, 140, 0.38)';
-    else if (z.type === 'tank') tint = 'rgba(140, 80, 160, 0.45)';
-    if (tint) {
-      ctx.globalCompositeOperation = 'source-atop';
-      ctx.fillStyle = tint;
-      ctx.fillRect(drawX, drawY, tw, th);
-      ctx.globalCompositeOperation = 'source-over';
-    }
+    ctx.drawImage(zspr, fi*fw, 0, fw, fh, -tw/2, -th+10, tw, th);
     ctx.restore();
   } else {
     // —— 代码绘制（"原来那版"：绿正常 / 深绿快 / 灰紫坦克，颜色正确，尺寸可调）
