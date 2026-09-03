@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>8-BIT 地牢求生</title>
+<link rel="stylesheet" href="css/style.css?v=19">
+<style>
+/* ======== 登录/注册 & 存档 模态框 ======== */
+.modal-mask {position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;display:flex;align-items:center;justify-content:center}
+.modal-mask.hidden{display:none}
+.modal-card{background:#1a1a22;color:#eee;border-radius:14px;padding:28px 32px;min-width:340px;max-width:440px;border:2px solid #3a3a50;box-shadow:0 12px 40px rgba(0,0,0,.6);font-family:system-ui,'Microsoft YaHei',sans-serif}
+.modal-title{font-size:22px;font-weight:700;text-align:center;margin-bottom:18px;color:#ffd700;letter-spacing:2px}
+.modal-sub{text-align:center;color:#888;font-size:13px;margin-bottom:18px}
+.modal-row{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.modal-row label{font-size:13px;color:#aaa}
+.modal-row input{background:#0f0f18;border:1px solid #3a3a50;border-radius:6px;padding:10px 12px;color:#fff;font-size:15px;outline:none;transition:border-color .15s}
+.modal-row input:focus{border-color:#ffd700}
+.modal-btn{width:100%;padding:11px;border:none;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer;transition:transform .1s}
+.modal-btn:active{transform:scale(.97)}
+.modal-btn-primary{background:linear-gradient(135deg,#ffd700,#ff8c00);color:#1a1a22;margin-top:4px}
+.modal-btn-secondary{background:#3a3a50;color:#eee;margin-top:6px}
+.modal-btn-danger{background:#5a1f1f;color:#ff9090}
+.modal-error{color:#ff6b6b;font-size:13px;text-align:center;margin-top:8px;min-height:18px}
+.modal-switch{text-align:center;margin-top:14px;color:#888;font-size:13px}
+.modal-switch a{color:#ffd700;cursor:pointer;text-decoration:underline}
+.modal-user-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#111118;border-radius:6px;margin-bottom:14px}
+.modal-user-bar .u-name{color:#ffd700;font-weight:600}
+.modal-user-bar .u-logout{color:#888;cursor:pointer;font-size:12px}
+.modal-user-bar .u-logout:hover{color:#ff6b6b}
+
+/* 存档槽列表 */
+.save-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px}
+.save-slot{background:#111118;border:1px solid #2a2a3a;border-radius:8px;padding:10px 6px;cursor:pointer;text-align:center;transition:all .15s;min-height:70px;display:flex;flex-direction:column;justify-content:center;align-items:center}
+.save-slot:hover{border-color:#ffd700;transform:translateY(-2px)}
+.save-slot.filled{background:linear-gradient(135deg,#1e2a40,#151525)}
+.save-slot.empty{opacity:.5}
+.save-slot .slot-num{font-size:20px;font-weight:700;color:#aaa}
+.save-slot.filled .slot-num{color:#ffd700}
+.save-slot .slot-name{font-size:11px;color:#ccc;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.save-slot .slot-info{font-size:10px;color:#888;margin-top:2px}
+.save-slot-actions{display:flex;gap:6px;margin-top:14px;justify-content:center}
+.save-slot-actions button{padding:8px 14px;border-radius:6px;border:1px solid #3a3a50;background:#222;color:#eee;cursor:pointer;font-size:13px}
+.save-slot-actions button:hover{border-color:#ffd700}
+.save-slot-actions button.primary{background:linear-gradient(135deg,#ffd700,#ff8c00);color:#1a1a22;border:none;font-weight:600}
+.save-slot-actions button.danger:hover{border-color:#ff6b6b;color:#ff6b6b}
+</style>
+</head>
+<body>
+
+<!-- ========== 登录/注册 模态框 ========== -->
+<div id="authModal" class="modal-mask">
+  <div class="modal-card">
+    <div class="modal-title">☠ 8-BIT 地牢求生 ☠</div>
+    <div class="modal-sub">请先登录或注册账号（每账号 10 个存档槽）</div>
+    <div id="authForm">
+      <div class="modal-row">
+        <label>用户名</label>
+        <input id="authUsername" type="text" autocomplete="off" placeholder="2-16 字符">
+      </div>
+      <div class="modal-row">
+        <label>密码</label>
+        <input id="authPassword" type="password" autocomplete="off" placeholder="至少 3 位">
+      </div>
+      <button class="modal-btn modal-btn-primary" id="authSubmit">登录</button>
+      <div class="modal-error" id="authError"></div>
+      <div class="modal-switch">
+        <span id="authSwitchText">还没有账号？</span> <a id="authSwitchLink">立即注册 →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 存档选择 模态框 ========== -->
+<div id="saveModal" class="modal-mask hidden">
+  <div class="modal-card" style="min-width:440px">
+    <div class="modal-title">⚔ 选择存档</div>
+    <div id="saveUserBar" class="modal-user-bar">
+      <span>欢迎，<span class="u-name" id="saveUsername"></span></span>
+      <span class="u-logout" id="saveLogout">退出登录</span>
+    </div>
+    <div id="saveModeText" class="modal-sub">选择一个存档开始游戏</div>
+    <div class="save-grid" id="saveGrid"></div>
+    <div class="save-slot-actions">
+      <button class="primary" id="newGameBtn">▶ 新游戏（空存档）</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 游戏本体 ========== -->
+<div id="gameContainer">
+  <canvas id="game" width="960" height="720"></canvas>
+  <!-- 极简 HUD：左上=波数，右上=武器等级+耐久，中间=暂停按钮，无黑底 -->
+  <div id="hud">
+    <div id="hudLeft">
+      <div id="hudWave">第 <span id="waveTxt">1</span> 波</div>
+      <div id="hudRes">
+        <span style="color:#ffd700">◉</span><span id="goldTxt">0</span>
+        <span style="color:#5f5">♥</span><span id="foodTxt">0</span>
+        <span style="color:#5af">⚡</span><span id="powerTxt">0</span>
+      </div>
+    </div>
+    <button id="pauseBtn" title="暂停 / 查看状态">⏸</button>
+    <div id="hudWeapon">
+      <span class="hud-w-name">⚔ <span id="playerLvlTxt">Lv.1 新手木棒</span></span>
+      <div class="hud-bar"><div id="playerHpBar"></div></div>
+    </div>
+  </div>
+  <!-- 暂停面板（点击暂停按钮后弹出，显示完整状态） -->
+  <div id="pausePanel" class="hidden">
+    <div class="pause-card">
+      <div class="pause-title">⏸ 暂停中</div>
+      <div class="pause-stats">
+        <div class="stat"><span style="color:#ffd700">◉</span> 金币: <span id="pGoldTxt">0</span>/<span id="goldCapTxt">500</span></div>
+        <div class="stat"><span style="color:#5f5">♥</span> 食物: <span id="pFoodTxt">0</span>/<span id="foodCapTxt">300</span></div>
+        <div class="stat"><span style="color:#5af">⚡</span> 电力: <span id="pPowerTxt">0</span>/<span id="powerCapTxt">200</span></div>
+        <div class="stat"><span style="color:#f55">⛨</span> 大门: <span id="doorHpTxt">100/100</span></div>
+        <div class="stat"><span style="color:#f88">☠</span> 击杀: <span id="killTxt">0</span></div>
+        <div class="stat"><span style="color:#fc2">🌊</span> 下一波: <span id="nextWaveTxt">--</span></div>
+      </div>
+      <div class="pause-actions">
+        <button id="resumeBtn">▶ 继续游戏</button>
+        <button id="saveSlotBtn" style="background:#ffd700;color:#1a1a22">💾 保存存档</button>
+        <button id="quitBtn" style="background:#5a1f1f;color:#ff9090">↩ 退出到存档界面</button>
+      </div>
+    </div>
+  </div>
+  <div id="waveInfo"></div>
+  <div id="messageLog"></div>
+  <div id="buildMenu"></div>
+  <div id="overlay">
+    <h1>☠ 8-BIT 地牢求生 ☠</h1>
+    <h2>DUNGEON SURVIVAL</h2>
+    <p>⬛ <b style="color:#fff">陆地</b>：丧尸从左右两侧涌来攻击中央大门，门破则游戏结束</p>
+    <p>⬛ <b style="color:#fff">你自己</b>：用<span style="color:#2ecc71"> WASD / 摇杆</span>在地面走动，<span style="color:#f44">空格 / 攻击键</span>挥剑近战</p>
+    <p>⬛ <b style="color:#fff">地下室</b>：点击地下室格子→弹出建造菜单建造各种房间</p>
+    <p>⬛ <b style="color:#fff">升级</b>：建造<span style="color:#fa5">铁匠铺⚒</span>后点击它升级装备</p>
+    <p>⬛ <b style="color:#fff">地面资源堆</b>：地图上会随机出现资源小堆，走过去自动拾取</p>
+    <p>⬛ <b style="color:#fff">穿过大门</b>：从门口可以上下穿梭陆地与地下室</p>
+    <p style="color:#8ff;margin-top:18px;font-size:16px">▼ 请选择你的设备类型 ▼</p>
+    <div id="deviceSelect">
+      <button class="device-btn" data-device="pc">
+        <span class="emoji">💻</span>电脑端
+      </button>
+      <button class="device-btn" data-device="mobile">
+        <span class="emoji">📱</span>手机端
+      </button>
+    </div>
+    <p id="hintMobile" class="hidden">手机竖握使用 · 画面会旋转为标准横屏 · 右下摇杆 + 左上攻击</p>
+    <p id="hintPC" class="hidden">WASD 移动 · 空格/J 挥剑 · 鼠标点击地下空格建造</p>
+    <button id="startBtn" disabled style="opacity:.4;cursor:not-allowed">▶ 开始游戏</button>
+  </div>
+</div>
+
+<!-- 手机端虚拟按键（默认隐藏，选择手机后显示） -->
+<div id="virtualPad" style="display:none">
+  <div id="joyBase"><div id="joyStick"></div></div>
+  <div id="attackBtn">⚔</div>
+</div>
+
+<!-- 按依赖顺序加载脚本 -->
+<script src="js/config.js?v=19"></script>
+<script src="js/users.js?v=19"></script>
+<script src="js/assets.js?v=19"></script>
+<script src="js/engine.js?v=19"></script>
+<script src="js/render.js?v=19"></script>
+<script src="js/input.js?v=19"></script>
+<script src="js/main.js?v=19"></script></body>
+</html>
