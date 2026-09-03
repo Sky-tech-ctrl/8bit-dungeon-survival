@@ -177,53 +177,87 @@ canvas {
   box-shadow: 0 0 30px rgba(80, 160, 255, 0.25), inset 0 0 40px rgba(0,0,0,0.6);
 }
 
-/* 建造选择弹窗 · 真实物理尺寸 500×480（不再用 transform scale 缩放下导致点击命中区域错乱）
-   - 4 列 × 3 行 Grid（1 行标题 + 3 行按钮），共 12 个单元放置 10 个房间按钮
-   - 画布 960×720：弹窗占约 52% 宽 / 67% 高，按钮 ~115×120，emoji 28px + 文字 + 价格都清晰可读
-   - 仅作用于 .build-grid（避免影响房间详情/铁匠铺弹窗）*/
+/* 建造选择弹窗 · 尺寸集中用 CSS 变量（经验 110112：单一控制入口，便于回滚/反复微调）
+   - 画布 960×720 → 容器 860×680，四周边距约 50/20，绝对不被画布裁边
+   - 4 列 × 3 行 Grid（1 标题 + 3 按钮行），放 10 房间正好（剩 2 空格，不影响）
+   - 按钮「盒子」调小紧凑：icon 名 价格限 1~2 行，保证 10 个全部完整可见不溢出
+   - 所有变量以 --bm-* 前缀，改动只需改容器内 6 行变量，无耦合风险 */
 #buildMenu.build-grid {
+  --bm-w: 860px;
+  --bm-h: 680px;
+  --bm-gap: 8px;
+  --bm-pad: 14px;
+  --bm-border: 4px;
+  --bm-title-fs: 15px;
+  --bm-close-fs: 14px;
+  --bm-btn-pad: 5px 4px;
+  --bm-btn-border: 2px;
+  --bm-btn-name-fs: 11px;
+  --bm-btn-icon-fs: 22px;
+  --bm-btn-cost-fs: 10px;
+  --bm-btn-gap: 2px;
+
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: auto repeat(3, 1fr);
-  gap: 6px;
-  width: 500px;
-  height: 480px;
-  max-width: 96%;
-  max-height: 96%;
+  grid-template-rows: auto repeat(3, minmax(0, 1fr));
+  gap: var(--bm-gap);
+  width:  var(--bm-w);
+  height: var(--bm-h);
+  max-width: 98%;
+  max-height: 98%;
   overflow: hidden;
-  padding: 10px;
-  border-width: 4px;
+  padding: var(--bm-pad);
+  border-width: var(--bm-border);
   transform: translate(-50%, -50%);
 }
-/* 仅 build-grid 下的标题/按钮/价格做紧凑调优，不影响其它弹窗 */
+/* ---- 标题 + 关闭按钮 ---- */
 #buildMenu.build-grid .build-popup-title {
-  padding: 4px 6px 8px;
-  font-size: 14px;
+  padding: 4px 8px 10px;
+  font-size: var(--bm-title-fs);
   letter-spacing: 0.5px;
   border-bottom-width: 2px;
   align-items: center;
 }
 #buildMenu.build-grid .build-popup-title button.close-popup {
-  font-size: 13px;
-  padding: 3px 10px;
+  font-size: var(--bm-close-fs);
+  padding: 4px 12px;
 }
+/* ---- 建造按钮（盒子小，内容紧凑，盒子不撑破网格行）---- */
 #buildMenu.build-grid .build-btn {
-  padding: 5px 3px;
-  border-width: 2px;
-  font-size: 12px;
-  gap: 3px;
+  padding: var(--bm-btn-pad);
+  border-width: var(--bm-btn-border);
+  font-size: var(--bm-btn-name-fs);
+  gap: var(--bm-btn-gap);
   border-radius: 4px;
-  /* 物理按钮 115×120，移动端/鼠标点击都足够（Fitts 友好） */
+  min-width: 0;   /* 允许 Grid 压缩到 minmax(0,1fr) */
+  min-height: 0;
 }
 #buildMenu.build-grid .build-btn .icon {
-  font-size: 28px;
+  font-size: var(--bm-btn-icon-fs);
+  line-height: 1.1;
+}
+#buildMenu.build-grid .build-btn div:nth-of-type(2) {
+  /* 名字：允许 1 行（超过省略号…）—— 全部 4 字以内的房间名都够用，留保险 */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 #buildMenu.build-grid .build-btn .cost {
-  font-size: 11px;
+  font-size: var(--bm-btn-cost-fs);
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  max-width: 100%;
 }
+/* ---- 空间不足 提示 ---- */
 #buildMenu.build-grid .build-btn.no-space::after {
   bottom: -14px;
   font-size: 10px;
+  letter-spacing: 0;
 }
 
 /* 弹窗为空时不显示 */
