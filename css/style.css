@@ -177,11 +177,8 @@ canvas {
   box-shadow: 0 0 30px rgba(80, 160, 255, 0.25), inset 0 0 40px rgba(0,0,0,0.6);
 }
 
-/* 只有建造选择弹窗才启用 4 列正方形网格布局
-   用户明确要求：按钮整体缩小到"现在的二十分之一"→ 用 transform: scale(0.05) 做严格整体缩放，
-   保证所有内部元素（按钮、标题、字号、图标、边框）按同一比例同步缩小，
-   比逐项改 width/padding/font-size 更精确，不会出现元素错位 / 比例失真。
-   原基准 680×620 → 缩放后 34×31，正好是 1/20。 */
+/* 建造选择弹窗 · 正方形网格布局（画布 960×720，菜单缩到 ~0.5 ≈ 340×310：
+   既保证 10 个房间完整一屏显示、文字/emoji 清晰可读，又不至于像原 680×620 那样覆盖画面大半）*/
 #buildMenu.build-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -190,7 +187,7 @@ canvas {
   width: 680px;
   height: 620px;
   overflow: hidden;
-  transform: translate(-50%, -50%) scale(0.05);
+  transform: translate(-50%, -50%) scale(0.5);
   transform-origin: center center;
 }
 

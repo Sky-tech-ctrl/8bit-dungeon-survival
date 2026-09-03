@@ -652,7 +652,9 @@ Game.prototype.drawPlayer = function(ctx, p) {
               this.input.keys['KeyA']||this.input.keys['KeyD']||
               this.input.keys['KeyW']||this.input.keys['KeyS']||
               this.input.keys['ArrowUp']||this.input.keys['ArrowDown'])) fi = 1;
-    // 目标尺寸：脚与地面线对齐 → 绘制高度 40px（玩家 54:108 ≈ 1:2，比原来稍高显精神）
+    // 目标尺寸：脚与地面线对齐 → 绘制高度 40px
+    // 新帧 80:108（武器完整入帧的宽幅玩家），默认 targetW = 40*80/108 ≈ 30；
+    // 攻击帧挥剑伸在角色右侧，向左翻时不要把剑"切掉"——这里 drawImage 已经按全帧绘制，不裁剪，OK。
     const groundContactY = p.inBasement ? Math.min(H - 6, p.y + 10) : GROUND_Y - 3;
     const targetH = 40;
     const targetW = Math.round(targetH * (fw / fh));
@@ -850,13 +852,15 @@ Game.prototype.drawSoldier = function(ctx, s) {
   // 精灵图（3 帧 idle/walk/shoot）
   const sspr = this.assets.get('soldier_sprite');
   if (sspr) {
+    // 新帧 80×96：枪 100% 入帧；按 th=60 计算 tw ≈ 60*80/96 = 50（稍宽，枪口闪光仍在正确位置）
     const frames = 3;
     const fw = sspr.naturalWidth / frames;
     const fh = sspr.naturalHeight;
     let fi = 0;
     if (shoot > 0.4) fi = 2;
     else if (Math.abs(s.x - (s.targetX||s.x)) > 2) fi = 1;
-    const tw = 34, th = 60;
+    const th = 60;
+    const tw = Math.round(th * (fw / fh));
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     // 士兵面朝丧尸方向（与丧尸相反）
@@ -934,13 +938,16 @@ Game.prototype.drawZombie = function(ctx, z) {
   const zombieFh = zspr ? zspr.naturalHeight : 0;
   const spriteValid = !!(zspr && zombieFw >= 10 && zombieFw <= 200 && zombieFh >= 10 && zombieFh <= 200);
   if (spriteValid) {
+    // PVZ 风丧尸：新帧 72×128，按地面接触点缩放；原来的 tw=32/th=66（接近 1:2，新帧 72:128≈0.5625）
+    // 保持 th=66 保证视觉高度不变，tw 自动按 fw/fh 比例放大 → ≈ 66*72/128 ≈ 37
     const frames = 3;
     const fw = zombieFw;
     const fh = zombieFh;
     let fi = 0;
     if (z.attackAnim > 0.4) fi = 2;
     else if (Math.abs(z.walkAnim) > 0.3) fi = 1;
-    const tw = 32, th = 66;
+    const th = 66;
+    const tw = Math.round(th * (fw / fh));
     const drawX = -tw/2, drawY = -th+10;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
