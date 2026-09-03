@@ -106,46 +106,37 @@ Game.prototype.applyMobileLayout = function() {
 // 手机端布局由 CSS 统一控制：
 //   body.mobile-mode #gameContainer.mobile {
 //     position: fixed; top:0; left:0;
-//     width: 100vh;  height: 100vw;
+//     width: 100vh / 100dvh;   /* = Hp, viewport 内高（物理竖高） */
+//     height: 100vw / 100dvw;  /* = Wp, viewport 内宽（物理横宽） */
 //     transform-origin: left top;
-//     transform: rotate(90deg) translateX(-100%);
+//     transform: translateY(-100%) rotate(90deg);  /* % 相对 height */
 //   }
-// 无论 CSS 实际参数如何，我们通过 canvas.getBoundingClientRect() 拿到它
-// 在物理屏幕上的真实渲染矩形，做线性映射 —— 这是最稳健的方案，
-// 不再依赖任何"旋转中心/平移量"的假设。
+//   body.mobile-mode canvas { width:100%!important; height:100%!important; }
+//
+// 由此推导坐标逆变换（屏幕坐标(clientX, clientY) → 游戏逻辑(mx, my)）：
+//   正向：容器本地 (cx, cy)  →  translateY(-Wp) → (cx, cy - Wp)  →  rotate(90°) 顺时针绕 (0,0)
+//         旋转矩阵 (x,y) → (-y, x)
+//         所以 屏幕 (sx, sy)  =  (Wp - cy, cx)
+//   逆向：cx = sy，  cy = Wp - sx
+//   未变换 canvas 尺寸：width=Hp（横）, height=Wp（竖）
+//   逻辑 W×H → canvas 本地: cx = mx/W * Hp,  cy = my/H * Wp
+//   联立：
+//     sy = mx * Hp / W   → mx = sy * W / Hp
+//     sx = Wp - my * Wp/H → my = (1 - sx/Wp) * H
+//
+// 其中 Wp = window.innerWidth（物理横）, Hp = window.innerHeight（物理竖）。
+// 这个实现 100% 与 CSS 变换对齐，与 getBoundingClientRect 结果无关。
 Game.prototype.screenToGameCoords = function(clientX, clientY) {
-  const rect = this.canvas.getBoundingClientRect();
-  // 注意：手机端 canvas 是旋转后渲染到屏幕上的，
-  // rect.width / rect.height 给出的是物理屏幕上的"水平/竖直占地"，
-  // 但对于 CSS rotate(90deg) 的矩形，rect.width 对应逻辑画布的 H，rect.height 对应逻辑画布的 W。
-  // 我们使用"屏幕坐标相对于渲染矩形各边的距离"做双线性映射：
-  //   从画布左上角 → 右下角的逻辑 W×H 投影到 物理矩形的"本地坐标"
   if (this.deviceMode !== 'mobile' || !this._mobile) {
+    const rect = this.canvas.getBoundingClientRect();
     const mx = (clientX - rect.left) * (W / rect.width);
     const my = (clientY - rect.top) * (H / rect.height);
     return { mx, my };
   }
-  // CSS rotate(90deg) 顺时针 + translateX(-100%) 后的情况：
-  // 画布逻辑坐标系：左上角(W=0,H=0) → 右下(W,H)
-  // 在屏幕上：逻辑的 (W=0, H=0)（左上） 会被 rotate+translate 映射到 物理矩形的 "左 顶"角吗？
-  // 不要猜测，用旋转前后已知对应关系推导：
-  //   原始容器（未变换时）：top=0 left=0，size (100vh × 100vw) = (容器宽 cssContW × 容器高 cssContH)
-  //   CSS 先执行 translateX(-100%) （向右阅读）：向左平移 cssContW → 新左上角 (x=-cssContW, y=0)
-  //   再绕 left-top 顺时针 rotate(90deg)：旋转矩阵 (x,y) → (-y, x)
-  //     → (-cssContW, 0) → (0, -cssContW)        ← 新容器左上角(对应逻辑画布(0,0))
-  //     → (0, 0)         → (0, 0)
-  //     → (-cssContW, cssContH) → (-cssContH, -cssContW) ← 画布(0,H)
-  //     → (0, cssContH)        → (-cssContH, 0)          ← 画布(W,H)
-  // 但 translate 是在"自身坐标系"，所以实际结果在 viewport 上：
-  //   旋转后的容器左上角(viewport坐标) 对应 逻辑画布点 (W=0, H=0)
-  //   已知 rect = 容器渲染后在屏幕上的包围盒。我们直接建立两个映射：
-  //     屏幕 x: rect.left → 逻辑 H=0 （画布上边）； rect.right → 逻辑 H=H （画布下边）
-  //     屏幕 y: rect.top  → 逻辑 W=W （画布右边）； rect.bottom → 逻辑 W=0 （画布左边）
-  // 也就是：竖直方向走 H，水平走 W（轴交换了）。
-  const sxn = (clientX - rect.left) / rect.width;   // 0→1  (从 rect.left → rect.right)
-  const syn = (clientY - rect.top) / rect.height;   // 0→1  (从 rect.top → rect.bottom)
-  const mx = (1 - syn) * W;   // 0（顶部时）→ W（底部时）
-  const my = sxn * H;         // 0（左边时）→ H（右边时）
+  const Wp = window.innerWidth;
+  const Hp = window.innerHeight;
+  const mx = Math.max(0, Math.min(W, clientY * W / Hp));
+  const my = Math.max(0, Math.min(H, (1 - clientX / Wp) * H));
   return { mx, my };
 };
 

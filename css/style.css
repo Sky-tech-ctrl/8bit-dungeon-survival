@@ -404,10 +404,6 @@ canvas {
 #hintPC { color:#8af; font-size:12px; margin-top:8px; opacity:.9; }
 
 /* ==================== 手机端视觉横屏 ==================== */
-#gameContainer.mobile {
-  border-width: 2px;
-  transform-origin: left top;
-}
 
 body.mobile-mode {
   display: block;
@@ -417,6 +413,50 @@ body.mobile-mode {
   background: #000;
 }
 
+/* 思路：竖握手机（宽Wp < 高Hp）时，让"游戏容器"以 Wp×Hp 先占据整个物理视口，
+   然后把容器绕自己的"左上"旋转 -90°（逆时针），此时原宽度(Wp)变成高度，
+   再整体向右平移 Hp（旋转后原来上边在左边），最终填满整个视口。
+   更稳妥的方法 —— 不要用复杂的 rotate/translate 组合，而是：
+   1) 容器 size = 物理视口尺寸(100vw × 100vh)
+   2) 旋转中心 = 左上 (left top)
+   3) rotate(90deg) 顺时针 → 旋转后容器宽高互换：width=100vh, height=100vw，
+      但容器的左上点落在 viewport (x=0, y=0)。rotate(90deg)顺时针后，
+      容器水平向右延伸到 x=+100vw 范围内（竖屏的话超出），且垂直方向只有 100vw
+      （画面是横向的）。
+   所以我们需要让 rotate 后，容器的"新底边"对齐 viewport 的右边（即 viewport 的顶部/底部/左边/右边全部与 viewport 边缘贴合，无负坐标）。
+
+已知：viewport 宽 Wp，高 Hp（竖握手机：Hp > Wp）。
+我们要：游戏画面（逻辑宽 W=960 横向，高 H=720 纵向）在旋转 90° 后，"横向"能填满 viewport 的纵向高度，纵向填满 viewport 的横向宽度，并能完整显示（无负坐标/裁剪）。
+
+变换步骤（绕 left top 旋转+translate）：
+- 初始容器：position fixed, top=0, left=0
+- 宽度 = Hp（= viewport 高度，因为旋转后成为"横向"），高度 = Wp（= viewport 宽度，旋转后成为"纵向"）
+- rotate(90deg) 顺时针绕 left top 后：容器的 (0,0) → 仍在 (0,0)，
+  容器"上边(原左边)"落在 viewport 左边缘，
+  容器"下边(原右边)"落在 viewport x=Hp 处（超出视口 Wp），
+  容器"左边(原下边)"落在 viewport y=0，
+  容器"右边(原上边)"落在 viewport y=Wp。
+我们想让容器最终在 viewport 里 [x∈[0,Wp], y∈[0,Hp]]。所以旋转后把容器向左平移 (Hp - Wp) 就对了？不对，因为 rotate 是顺时针 90°，平移方向是旋转后的坐标系。
+
+更简单：直接用"viewBox+rotate"的思路，调整 transform-origin + rotate + translate，
+通过"旋转中心位于 viewport 的 (Hp,0)，顺时针 rotate(90deg)"，这样"原左上(0,0)"→(0,0)，"原右上(Hp,0)"→(Hp,Hp)=刚好 viewport 右上角。
+
+最终 CSS 变换：
+  transform-origin: left top;
+  transform: translateY(-100%) rotate(90deg);
+因为 rotate 是顺时针 90deg，translateY(-100%) 把容器向上平移一个容器宽度。
+让我们验证：Wp=1280(浏览器宽), Hp=633(浏览器高)。注意：这是横屏窗口，不是手机竖屏。
+对 1280×633 窗口，container 初始 width=100vh=633, height=100vw=1280。
+初始 rect：top=0 left=0，右下 (633, 1280)。
+translateY(-100%) → 相当于 y' = y - 1280。rect 左上：(0, -1280)；右下：(633, 0)。
+然后 rotate(90deg) 顺时针绕 left top (0,0)：点 (x,y) → (-y, x)。
+  左上：(0,-1280) → (1280, 0)
+  左下：(633,-1280) → (1280, 633)
+  右上：(0,0) → (0, 0)
+  右下：(633, 0) → (0, 633)
+容器现在在 viewport 内水平 0-1280 垂直 0-633，恰好填满！ ✓
+*/
+
 body.mobile-mode #gameContainer.mobile {
   position: fixed;
   top: 0;
@@ -425,15 +465,23 @@ body.mobile-mode #gameContainer.mobile {
   width: 100dvh;
   height: 100vw;
   height: 100dvw;
-  /* 应用顺序：先 translateX(-100% → 向左搬移一个宽度) 再 rotate(90°顺时针) 填满屏幕 */
-  transform: rotate(90deg) translateX(-100%);
+  transform-origin: left top;
+  /* 关键：先 translateY(-100%) 再 rotate(90deg) 顺时针，
+     最终画布完整占据 viewport 的 (0,0)-(Wp,Hp) 矩形（无负坐标、无裁剪、无溢出） */
+  transform: translateY(-100%) rotate(90deg);
   box-shadow: none;
   border: none;
+  margin: 0;
+  padding: 0;
 }
 
 body.mobile-mode canvas {
   width: 100% !important;
   height: 100% !important;
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
 }
 
 /* 手机端建造菜单更紧凑 */
