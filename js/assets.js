@@ -20,7 +20,7 @@ class AssetLoader {
   }
 
   // 资源版本号（每次改贴图时同步更新，强制浏览器绕过缓存）
-  static VERSION = '25';
+  static VERSION = '26';
 
   load(key, src) {
     const img = new Image();
