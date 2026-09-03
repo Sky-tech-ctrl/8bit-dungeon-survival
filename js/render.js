@@ -423,12 +423,15 @@ Game.prototype.drawRoom = function(ctx, room) {
   ctx.save();
   ctx.translate(rx+rw/2, ry+rh/2);
   const tex = this.assets.get(room.type);
-  if (tex) {
+  if (tex && tex.naturalWidth > 0) {
     ctx.imageSmoothingEnabled = false;
     try {
       // 仅绘制在墙内空心矩形中（不覆盖墙）
       ctx.drawImage(tex, -(fw/2), -(fh/2), fw, fh);
-    } catch(e) {}
+    } catch(e) {
+      // 贴图绘制失败时，用代码 fallback 补上内饰，不留下空房间
+      this.drawRoomInterior(ctx, room.type, td, fw, fh);
+    }
     ctx.restore();
   } else {
     this.drawRoomInterior(ctx, room.type, td, fw, fh);

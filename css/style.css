@@ -222,35 +222,26 @@ canvas {
   font-size: var(--bm-close-fs);
   padding: 4px 12px;
 }
-/* ---- 建造按钮（盒子小，内容紧凑，盒子不撑破网格行）---- */
+/* ---- 建造按钮（盒子小，内容紧凑）---- */
 #buildMenu.build-grid .build-btn {
   padding: var(--bm-btn-pad);
   border-width: var(--bm-btn-border);
   font-size: var(--bm-btn-name-fs);
   gap: var(--bm-btn-gap);
   border-radius: 4px;
-  min-width: 0;   /* 允许 Grid 压缩到 minmax(0,1fr) */
+  min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 #buildMenu.build-grid .build-btn .icon {
   font-size: var(--bm-btn-icon-fs);
   line-height: 1.1;
 }
-#buildMenu.build-grid .build-btn div:nth-of-type(2) {
-  /* 名字：允许 1 行（超过省略号…）—— 全部 4 字以内的房间名都够用，留保险 */
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* 价格：自动换行，不截断 */
 #buildMenu.build-grid .build-btn .cost {
   font-size: var(--bm-btn-cost-fs);
-  line-height: 1.15;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  white-space: normal;
+  line-height: 1.2;
+  word-break: break-all;
   max-width: 100%;
 }
 /* ---- 空间不足 提示 ---- */

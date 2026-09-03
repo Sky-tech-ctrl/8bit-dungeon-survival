@@ -20,13 +20,13 @@ class AssetLoader {
   }
 
   // 资源版本号（每次改贴图时同步更新，强制浏览器绕过缓存）
-  static VERSION = '24';
+  static VERSION = '25';
 
   load(key, src) {
     const img = new Image();
     img.loaded = false;
     img.onload = () => { img.loaded = true; };
-    img.onerror = () => { img.loaded = false; };
+    img.onerror = (e) => { img.loaded = false; console.warn('贴图加载失败:', key, src); };
     // 附加版本号查询参数，强制刷新图片缓存
     const sep = src.includes('?') ? '&' : '?';
     img.src = src + sep + 'v=' + AssetLoader.VERSION;
