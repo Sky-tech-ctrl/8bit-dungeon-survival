@@ -103,29 +103,29 @@ Game.prototype.applyMobileLayout = function() {
 };
 
 // ---- 屏幕坐标 → 游戏逻辑坐标（处理手机旋转逆变换） ----
-// 手机端布局由 CSS 统一控制：
+// 手机端布局由 CSS 统一控制（严格对齐，100% 数学匹配）：
 //   body.mobile-mode #gameContainer.mobile {
 //     position: fixed; top:0; left:0;
-//     width: 100vh / 100dvh;   /* = Hp, viewport 内高（物理竖高） */
-//     height: 100vw / 100dvw;  /* = Wp, viewport 内宽（物理横宽） */
+//     width : 100vh / 100dvh;   // = Hp（Hp = viewport innerHeight）
+//     height: 100vw / 100dvw;   // = Wp（Wp = viewport innerWidth）
 //     transform-origin: left top;
-//     transform: translateY(-100%) rotate(90deg);  /* % 相对 height */
+//     transform: translateY(100vh) rotate(-90deg);
+//     // CSS transform 从右向左执行：
+//     //   ① rotate(-90°) 逆时针 → 矩阵 (x,y) → (y, -x)
+//     //   ② translateY(100vh)     → y 方向 +Hp
 //   }
 //   body.mobile-mode canvas { width:100%!important; height:100%!important; }
 //
-// 由此推导坐标逆变换（屏幕坐标(clientX, clientY) → 游戏逻辑(mx, my)）：
-//   正向：容器本地 (cx, cy)  →  translateY(-Wp) → (cx, cy - Wp)  →  rotate(90°) 顺时针绕 (0,0)
-//         旋转矩阵 (x,y) → (-y, x)
-//         所以 屏幕 (sx, sy)  =  (Wp - cy, cx)
-//   逆向：cx = sy，  cy = Wp - sx
-//   未变换 canvas 尺寸：width=Hp（横）, height=Wp（竖）
-//   逻辑 W×H → canvas 本地: cx = mx/W * Hp,  cy = my/H * Wp
-//   联立：
-//     sy = mx * Hp / W   → mx = sy * W / Hp
-//     sx = Wp - my * Wp/H → my = (1 - sx/Wp) * H
-//
-// 其中 Wp = window.innerWidth（物理横）, Hp = window.innerHeight（物理竖）。
-// 这个实现 100% 与 CSS 变换对齐，与 getBoundingClientRect 结果无关。
+// 正向变换：容器本地 (cx, cy) → 屏幕 (sx, sy)
+//   ① rotate(-90): (cx, cy)          → (cy, -cx)
+//   ② translateY(Hp):               → (cy, -cx + Hp)
+//   ∴ sx = cy,   sy = Hp - cx
+// 逆变换（从屏幕坐标求容器本地坐标）：
+//   cx = Hp - sy
+//   cy = sx
+// 再映射到逻辑画布 (W×H) → canvas 本地 (Hp×Wp)：
+//   mx / W  = cx / Hp   →  mx = W * cx / Hp = W * (Hp - sy) / Hp = W * (1 - sy/Hp)
+//   my / H  = cy / Wp   →  my = H * cy / Wp = H * sx / Wp
 Game.prototype.screenToGameCoords = function(clientX, clientY) {
   if (this.deviceMode !== 'mobile' || !this._mobile) {
     const rect = this.canvas.getBoundingClientRect();
@@ -135,8 +135,8 @@ Game.prototype.screenToGameCoords = function(clientX, clientY) {
   }
   const Wp = window.innerWidth;
   const Hp = window.innerHeight;
-  const mx = Math.max(0, Math.min(W, clientY * W / Hp));
-  const my = Math.max(0, Math.min(H, (1 - clientX / Wp) * H));
+  const mx = Math.max(0, Math.min(W, W * (1 - clientY / Hp)));
+  const my = Math.max(0, Math.min(H, H * clientX / Wp));
   return { mx, my };
 };
 
