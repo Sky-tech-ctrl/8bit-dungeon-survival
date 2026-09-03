@@ -413,30 +413,28 @@ body.mobile-mode {
   background: #000;
 }
 
-/* 【严格数学推导的变换，确保画布完整位于 viewport [0..Wp] × [0..Hp]，无负坐标无裁剪】
+/* 【用户要求：画面"朝左"（顺时针 90°），并完整占据 viewport (0,0)-(Wp,Hp) 正坐标无裁剪】
 
-已知（竖握浏览器 window.innerWidth=Wp, innerHeight=Hp）：
-  - 容器初始尺寸（未变换）：
-      width = 100vh  = Hp    （横 = 竖屏高度，旋转后变成横向）
-      height = 100vw = Wp    （纵 = 竖屏宽度，旋转后变成纵向）
-  - transform-origin: left top （容器自身左上角）
-  - CSS transform 从**右向左**应用（最右边的先执行）
-  - 目标：最终画布在屏幕上正好占据矩形 (0,0) — (Wp,Hp)，无负坐标、无溢出裁剪。
+已知（window.innerWidth=Wp, innerHeight=Hp）：
+  容器初始（未变换）：
+      width  = 100vh  = Hp   （旋转后成为横向画面的宽度）
+      height = 100vw  = Wp   （旋转后成为纵向画面的高度）
+  transform-origin: left top
+  CSS transform 从右向左应用。
 
-推导：
-  Step1（右） 先 rotate(-90deg) ← 逆时针 90°
-         旋转矩阵：(x, y) → (y, -x)
-         初始4角：(0,0),(Hp,0),(0,Wp),(Hp,Wp)
-         旋转后：(0,0),(0,-Hp),(Wp,0),(Wp,-Hp)
-         bbox：x∈[0,Wp]  y∈[-Hp, 0]   ← 正好覆盖横向 Wp 宽度（完美！），
-                                      y 方向缺了一个 Hp 到 0。
-  Step2（左） 再 translateY(100vh) ← 向下平移 = Hp 像素
-         每个点 y' = y + Hp
-         平移后4角：(0,Hp),(0,0),(Wp,Hp),(Wp,0)
-         bbox：left=0, top=0, right=Wp, bottom=Hp  ✅  完美填满！
+目标变换：
+  Step1（右） rotate(90deg) 顺时针 —— 画面"朝左"（用户头向左歪90°看为正向）
+         矩阵 (x, y) → (-y, x)
+         初始4角 (0,0),(Hp,0),(0,Wp),(Hp,Wp)
+         旋转后 (0,0),(0,Hp),(-Wp,0),(-Wp,Hp)
+         bbox：x ∈ [-Wp, 0],  y ∈ [0, Hp]
+         → 横向正好覆盖 Wp 宽度，但 x 全在视口左侧外。
+  Step2（左） translateX(100vw) —— 向右平移 Wp 像素
+         每个点 x' = x + Wp
+         平移后4角：(Wp,0),(Wp,Hp),(0,0),(0,Hp)
+         bbox：left=0, top=0, right=Wp, bottom=Hp  ✅ 完美填满！
 
-因此 transform = translateY(100vh) rotate(-90deg)。
-translateY(100vh) 使用 vh 单位而不使用百分比，避免 translateY(%) 相对自身 height(Wp) 出错。
+∴ CSS 变换：translateX(100vw) rotate(90deg)
 */
 
 body.mobile-mode #gameContainer.mobile {
@@ -448,8 +446,8 @@ body.mobile-mode #gameContainer.mobile {
   height: 100vw;
   height: 100dvw;
   transform-origin: left top;
-  /* 先 rotate(-90deg) 逆时针把横屏内容"正过来"，再向下平移 Hp 像素到可视区 */
-  transform: translateY(100vh) rotate(-90deg);
+  /* 先顺时针 rotate(90deg) → 画面朝左；再向右平移 Wp 像素填满 viewport 正坐标 */
+  transform: translateX(100vw) rotate(90deg);
   box-shadow: none;
   border: none;
   margin: 0;
@@ -536,9 +534,9 @@ body:not(.mobile-mode) #virtualPad {
 
 #attackBtn {
   position: absolute;
-  /* 物理右下：竖握手机时右手拇指的自然触达位置 */
-  bottom: 24px;
-  right:  24px;
+  /* 用户指定：竖屏时的左上角（用户竖握手机时，攻击键就在左手拇指容易触达的上方） */
+  top:  24px;
+  left: 24px;
   width:  140px;
   height: 140px;
   border-radius: 50%;

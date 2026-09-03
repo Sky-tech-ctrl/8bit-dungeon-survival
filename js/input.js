@@ -103,29 +103,28 @@ Game.prototype.applyMobileLayout = function() {
 };
 
 // ---- 屏幕坐标 → 游戏逻辑坐标（处理手机旋转逆变换） ----
-// 手机端布局由 CSS 统一控制（严格对齐，100% 数学匹配）：
+// 手机端布局由 CSS 统一控制（画面朝左 = 顺时针 90° 旋转）：
 //   body.mobile-mode #gameContainer.mobile {
 //     position: fixed; top:0; left:0;
-//     width : 100vh / 100dvh;   // = Hp（Hp = viewport innerHeight）
-//     height: 100vw / 100dvw;   // = Wp（Wp = viewport innerWidth）
+//     width : 100vh / 100dvh;   // Hp = viewport innerHeight
+//     height: 100vw / 100dvw;   // Wp = viewport innerWidth
 //     transform-origin: left top;
-//     transform: translateY(100vh) rotate(-90deg);
+//     transform: translateX(100vw) rotate(90deg);
 //     // CSS transform 从右向左执行：
-//     //   ① rotate(-90°) 逆时针 → 矩阵 (x,y) → (y, -x)
-//     //   ② translateY(100vh)     → y 方向 +Hp
+//     //   ① rotate(90°) 顺时针 → 矩阵 (x,y) → (-y, x)
+//     //   ② translateX(Wp)      → x 方向 + Wp
 //   }
 //   body.mobile-mode canvas { width:100%!important; height:100%!important; }
 //
 // 正向变换：容器本地 (cx, cy) → 屏幕 (sx, sy)
-//   ① rotate(-90): (cx, cy)          → (cy, -cx)
-//   ② translateY(Hp):               → (cy, -cx + Hp)
-//   ∴ sx = cy,   sy = Hp - cx
-// 逆变换（从屏幕坐标求容器本地坐标）：
-//   cx = Hp - sy
-//   cy = sx
-// 再映射到逻辑画布 (W×H) → canvas 本地 (Hp×Wp)：
-//   mx / W  = cx / Hp   →  mx = W * cx / Hp = W * (Hp - sy) / Hp = W * (1 - sy/Hp)
-//   my / H  = cy / Wp   →  my = H * cy / Wp = H * sx / Wp
+//   ① rotate(90deg) 顺时针 → (-cy, cx)
+//   ② translateX(+Wp)      → (Wp - cy, cx)
+//   ∴  sx = Wp - cy,   sy = cx
+// 逆变换（屏幕 → 容器本地）：
+//   cx = sy,   cy = Wp - sx
+// 再映射到逻辑画布 W×H → 容器本地 Hp×Wp：
+//   mx / W = cx / Hp   →   mx = W * sy / Hp
+//   my / H = cy / Wp   →   my = H * (Wp - sx) / Wp = H * (1 - sx / Wp)
 Game.prototype.screenToGameCoords = function(clientX, clientY) {
   if (this.deviceMode !== 'mobile' || !this._mobile) {
     const rect = this.canvas.getBoundingClientRect();
@@ -135,8 +134,8 @@ Game.prototype.screenToGameCoords = function(clientX, clientY) {
   }
   const Wp = window.innerWidth;
   const Hp = window.innerHeight;
-  const mx = Math.max(0, Math.min(W, W * (1 - clientY / Hp)));
-  const my = Math.max(0, Math.min(H, H * clientX / Wp));
+  const mx = Math.max(0, Math.min(W, W * clientY / Hp));
+  const my = Math.max(0, Math.min(H, H * (1 - clientX / Wp)));
   return { mx, my };
 };
 
