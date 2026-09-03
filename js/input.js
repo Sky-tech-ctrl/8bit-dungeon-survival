@@ -50,7 +50,30 @@ Game.prototype.applyDeviceMode = function() {
     const onResize = () => this.applyMobileLayout();
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
+  } else {
+    this.applyPCLayout();
+    const onResize = () => this.applyPCLayout();
+    window.addEventListener('resize', onResize);
   }
+};
+
+// ---- 电脑端自适应缩放（保持4:3比例居中） ----
+Game.prototype.applyPCLayout = function() {
+  const vW = window.innerWidth;
+  const vH = window.innerHeight;
+  // 留出一点边距避免贴边
+  const pad = 40;
+  const scale = Math.min((vW - pad) / W, (vH - pad) / H);
+  // 限制最小比例 0.5，最大比例 2.5
+  const finalScale = Math.max(0.5, Math.min(2.5, scale));
+  const cssW = Math.floor(W * finalScale);
+  const cssH = Math.floor(H * finalScale);
+  const container = document.getElementById('gameContainer');
+  this.canvas.style.width = cssW + 'px';
+  this.canvas.style.height = cssH + 'px';
+  container.style.width = cssW + 'px';
+  container.style.height = cssH + 'px';
+  this._pc = { vW, vH, scale: finalScale, cssW, cssH };
 };
 
 // ---- 手机端视觉横屏布局 ----
