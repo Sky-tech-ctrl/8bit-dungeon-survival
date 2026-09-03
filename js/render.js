@@ -638,17 +638,12 @@ Game.prototype.drawPlayer = function(ctx, p) {
   }
 
   // 精灵图（若已加载）—— 3 帧横向排列：idle(0) walk(1) attack(2)
+  // 8-bit NES 风格单帧 54×108，角色完全填满帧 → 无需 FRAME_BBOX 裁剪，直接全帧绘制
   const spr = this.assets.get('player_sprite');
   if (spr) {
     const frames = 3;
     const fw = spr.naturalWidth / frames;
-    // 每帧的实际内容边界框（代码生成的 8-bit 玩家，确保头发/腰带/腕带完整）
-    // frame: [srcX(相对帧起点), srcY, srcW, srcH]
-    const FRAME_BBOX = [
-      [108, 40, 47, 113],  // frame0 idle (ratio 0.613)
-      [364, 40, 47, 113],  // frame1 walk (ratio 0.633)
-      [603, 40, 61, 100],  // frame2 attack (剑伸出宽 ratio 0.685)
-    ];
+    const fh = spr.naturalHeight;
     // 选帧：攻击动画时 → frame 2；走动中 → frame 1；否则 frame 0
     let fi = 0;
     if (p.attackAnim > 0.3) fi = 2;
@@ -657,20 +652,19 @@ Game.prototype.drawPlayer = function(ctx, p) {
               this.input.keys['KeyA']||this.input.keys['KeyD']||
               this.input.keys['KeyW']||this.input.keys['KeyS']||
               this.input.keys['ArrowUp']||this.input.keys['ArrowDown'])) fi = 1;
-    const bb = FRAME_BBOX[fi];
-    // 目标尺寸：用户要求缩小玩家体型（马里奥比例）绘制高度 36px
+    // 目标尺寸：脚与地面线对齐 → 绘制高度 40px（玩家 54:108 ≈ 1:2，比原来稍高显精神）
     const groundContactY = p.inBasement ? Math.min(H - 6, p.y + 10) : GROUND_Y - 3;
-    const targetH = 36;
-    const targetW = Math.round(targetH * (bb[2] / bb[3]));
+    const targetH = 40;
+    const targetW = Math.round(targetH * (fw / fh));
     const drawTopY = groundContactY - targetH + 2;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     if (p.facing < 0) {
       ctx.translate(x, drawTopY);
       ctx.scale(-1, 1);
-      ctx.drawImage(spr, fi*fw + bb[0], bb[1], bb[2], bb[3], -targetW/2, 0, targetW, targetH);
+      ctx.drawImage(spr, fi*fw, 0, fw, fh, -targetW/2, 0, targetW, targetH);
     } else {
-      ctx.drawImage(spr, fi*fw + bb[0], bb[1], bb[2], bb[3], x - targetW/2, drawTopY, targetW, targetH);
+      ctx.drawImage(spr, fi*fw, 0, fw, fh, x - targetW/2, drawTopY, targetW, targetH);
     }
     ctx.restore();
   }
