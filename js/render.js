@@ -947,6 +947,7 @@ Game.prototype.drawZombie = function(ctx, z) {
     if (z.attackAnim > 0.4) fi = 2;
     else if (Math.abs(z.walkAnim) > 0.3) fi = 1;
     const tw = 32, th = 66;
+    const drawX = -tw/2, drawY = -th+10;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     // 丧尸朝 DOOR_X 走（面朝中央）
@@ -954,7 +955,18 @@ Game.prototype.drawZombie = function(ctx, z) {
     if (!faceRight) {
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(zspr, fi*fw, 0, fw, fh, -tw/2, -th+10, tw, th);
+    ctx.drawImage(zspr, fi*fw, 0, fw, fh, drawX, drawY, tw, th);
+    // ===== 类型颜色叠加染色（保留像素透明） =====
+    // fast → 翠绿滤镜, tank → 暗紫滤镜, 普通/默认不染
+    let tint = null;
+    if (z.type === 'fast') tint = 'rgba(60, 220, 140, 0.38)';
+    else if (z.type === 'tank') tint = 'rgba(140, 80, 160, 0.45)';
+    if (tint) {
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.fillStyle = tint;
+      ctx.fillRect(drawX, drawY, tw, th);
+      ctx.globalCompositeOperation = 'source-over';
+    }
     ctx.restore();
   } else {
     // —— 代码绘制（"原来那版"：绿正常 / 深绿快 / 灰紫坦克，颜色正确，尺寸可调）
