@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>8-BIT 地牢求生</title>
-<link rel="stylesheet" href="css/style.css?v=20">
+<link rel="stylesheet" href="css/style.css?v=21">
 <style>
 /* ======== 登录/注册 & 存档 模态框 ======== */
 .modal-mask {position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;display:flex;align-items:center;justify-content:center}
@@ -41,6 +41,15 @@
 .save-slot.filled .slot-num{color:#ffd700}
 .save-slot .slot-name{font-size:11px;color:#ccc;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .save-slot .slot-info{font-size:10px;color:#888;margin-top:2px}
+/* 设备选择区（存档模态框内） */
+.device-section{margin-top:18px;padding:12px;border:1px solid #2a2a3a;border-radius:10px;background:#111118}
+.device-section .ds-title{font-size:13px;color:#ffd700;font-weight:600;text-align:center;margin-bottom:8px;letter-spacing:1px}
+.device-section .ds-hint{font-size:11px;color:#6af;text-align:center;margin-top:4px;opacity:.85;min-height:16px}
+.device-select-row{display:flex;gap:12px;justify-content:center}
+.device-select-row .ds-btn{flex:1;max-width:160px;padding:10px;background:#1a1a2e;border:2px solid #555;border-radius:8px;color:#fff;cursor:pointer;text-align:center;transition:all .15s;font-size:13px}
+.device-select-row .ds-btn:hover{background:#2a3a5a;border-color:#6af;transform:scale(1.03)}
+.device-select-row .ds-btn.selected{background:#2a5a3a;border-color:#8f8;box-shadow:0 0 14px #8f8}
+.device-select-row .ds-btn .emoji{font-size:22px;display:block;margin-bottom:4px}
 .save-slot-actions{display:flex;gap:6px;margin-top:14px;justify-content:center}
 .save-slot-actions button{padding:8px 14px;border-radius:6px;border:1px solid #3a3a50;background:#222;color:#eee;cursor:pointer;font-size:13px}
 .save-slot-actions button:hover{border-color:#ffd700}
@@ -83,6 +92,19 @@
     </div>
     <div id="saveModeText" class="modal-sub">选择一个存档开始游戏</div>
     <div class="save-grid" id="saveGrid"></div>
+    <!-- 设备选择区 -->
+    <div class="device-section">
+      <div class="ds-title">▼ 请选择你的设备类型 ▼</div>
+      <div class="device-select-row">
+        <button class="ds-btn" id="dsPcBtn" data-device="pc">
+          <span class="emoji">💻</span>电脑端
+        </button>
+        <button class="ds-btn" id="dsMobileBtn" data-device="mobile">
+          <span class="emoji">📱</span>手机端
+        </button>
+      </div>
+      <div class="ds-hint" id="dsHint">💡 建议按 UA 自动检测</div>
+    </div>
     <div class="save-slot-actions">
       <button class="primary" id="newGameBtn">▶ 新游戏（空存档）</button>
     </div>
@@ -161,11 +183,11 @@
 </div>
 
 <!-- 按依赖顺序加载脚本 -->
-<script src="js/config.js?v=20"></script>
-<script src="js/users.js?v=20"></script>
-<script src="js/assets.js?v=20"></script>
-<script src="js/engine.js?v=20"></script>
-<script src="js/render.js?v=20"></script>
-<script src="js/input.js?v=20"></script>
-<script src="js/main.js?v=20"></script></body>
+<script src="js/config.js?v=21"></script>
+<script src="js/users.js?v=21"></script>
+<script src="js/assets.js?v=21"></script>
+<script src="js/engine.js?v=21"></script>
+<script src="js/render.js?v=21"></script>
+<script src="js/input.js?v=21"></script>
+<script src="js/main.js?v=21"></script></body>
 </html>

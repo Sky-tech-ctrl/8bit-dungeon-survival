@@ -39,6 +39,7 @@ class Game {
 
   // ---- 用户系统：显示登录/存档模态框 ----
   setupAuth() {
+    const game = this;
     const authModal = document.getElementById('authModal');
     const saveModal = document.getElementById('saveModal');
     const authSubmit = document.getElementById('authSubmit');
@@ -51,6 +52,59 @@ class Game {
     const newGameBtn = document.getElementById('newGameBtn');
     const saveUserBar = document.getElementById('saveUsername');
     const saveLogout = document.getElementById('saveLogout');
+
+    // ---- 设备选择（嵌入存档模态框） ----
+    const dsPcBtn = document.getElementById('dsPcBtn');
+    const dsMobileBtn = document.getElementById('dsMobileBtn');
+    const dsHint = document.getElementById('dsHint');
+    let selectedDevice = null;
+
+    function detectUARecommend() {
+      const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+      return mobileUA ? 'mobile' : 'pc';
+    }
+
+    function setDevice(mode) {
+      selectedDevice = mode;
+      if (dsPcBtn) dsPcBtn.classList.toggle('selected', mode === 'pc');
+      if (dsMobileBtn) dsMobileBtn.classList.toggle('selected', mode === 'mobile');
+      if (dsHint) {
+        if (mode === 'mobile') dsHint.textContent = '📱 竖握使用 · 画面旋转横屏 · 摇杆+攻击';
+        else dsHint.textContent = '💻 WASD移动 · 空格/J挥剑 · 鼠标点击建造';
+      }
+    }
+
+    function bindDeviceSelect() {
+      if (dsPcBtn) dsPcBtn.onclick = () => setDevice('pc');
+      if (dsMobileBtn) dsMobileBtn.onclick = () => setDevice('mobile');
+      // 默认高亮 UA 推荐项，但仍需用户点击确认（否则保持未选中状态）
+      const uaRec = detectUARecommend();
+      if (dsPcBtn) dsPcBtn.style.boxShadow = (uaRec === 'pc') ? '0 0 10px #6af' : '';
+      if (dsMobileBtn) dsMobileBtn.style.boxShadow = (uaRec === 'mobile') ? '0 0 10px #6af' : '';
+      if (dsHint) {
+        dsHint.innerHTML = `💡 检测到你使用 <b style="color:#fc2">${uaRec === 'mobile' ? '手机端' : '电脑端'}</b>，请点击上方确认`;
+      }
+      selectedDevice = null;
+      if (dsPcBtn) dsPcBtn.classList.remove('selected');
+      if (dsMobileBtn) dsMobileBtn.classList.remove('selected');
+    }
+
+    function requireDevice() {
+      if (!selectedDevice) {
+        if (dsHint) {
+          const old = dsHint.innerHTML;
+          dsHint.innerHTML = `<span style="color:#f66">⚠ 请先选择设备类型（电脑端 / 手机端）</span>`;
+          dsHint.style.animation = 'none';
+          // 简单的闪烁提示
+          setTimeout(() => { dsHint.style.animation = 'dsShake .3s'; }, 10);
+          setTimeout(() => { dsHint.innerHTML = old; dsHint.style.animation = ''; }, 1800);
+        } else {
+          alert('请先选择设备类型（电脑端 / 手机端）');
+        }
+        return null;
+      }
+      return selectedDevice;
+    }
 
     let isRegister = false;
 
@@ -66,6 +120,7 @@ class Game {
     function showSave() {
       authModal.classList.add('hidden');
       saveModal.classList.remove('hidden');
+      bindDeviceSelect();
       renderSaveGrid();
     }
 
@@ -86,6 +141,8 @@ class Game {
     }
 
     function handleSlotClick(s) {
+      const mode = requireDevice();
+      if (!mode) return;
       if (s.filled) {
         // 读取
         const confirmLoad = confirm(`确定读取存档 ${s.slot}【${s.name}】吗？\n当前未保存的进度将丢失。`);
@@ -96,23 +153,25 @@ class Game {
           if (result.ok) {
             saveModal.classList.add('hidden');
             game._autoSaveSlot = s.slot;
-            game.startAfterAuth();
+            game.startAfterAuth(mode);
           } else {
             alert('读取失败：' + result.msg);
           }
         }
       } else {
         // 点空槽 → 新建游戏存到该槽位
-        handleNewGame(s.slot);
+        handleNewGame(s.slot, mode);
       }
     }
 
-    function handleNewGame(targetSlot) {
+    function handleNewGame(targetSlot, forceMode) {
+      const mode = forceMode || requireDevice();
+      if (!mode) return;
       saveModal.classList.add('hidden');
       game.reset();
       game._autoSaveSlot = targetSlot;
       // 先启动引擎
-      game.startAfterAuth();
+      game.startAfterAuth(mode);
       // 自动保存
       setTimeout(() => {
         const snap = game.exportSnapshot();
@@ -136,15 +195,17 @@ class Game {
     authPwd.addEventListener('keydown', e => { if (e.key === 'Enter') authSubmit.click(); });
 
     newGameBtn.onclick = () => {
+      const mode = requireDevice();
+      if (!mode) return;
       const slots = UserSystem.listSaves() || [];
       const emptySlot = slots.find(s => !s.filled);
       if (!emptySlot) {
         // 10个都满了，让用户选择要覆盖的槽
         const slot = parseInt(prompt('所有存档已满！\n请输入要覆盖的槽位（1-10）：', '1'));
         if (isNaN(slot) || slot < 1 || slot > 10) { alert('无效槽位'); return; }
-        handleNewGame(slot);
+        handleNewGame(slot, mode);
       } else {
-        handleNewGame(emptySlot.slot);
+        handleNewGame(emptySlot.slot, mode);
       }
     };
 
@@ -161,8 +222,8 @@ class Game {
     }
   }
 
-  // 用户完成登录 + 存档选择后，自动选设备 + 启动游戏
-  startAfterAuth() {
+  // 用户完成登录 + 存档选择 + 设备选择后，启动游戏
+  startAfterAuth(deviceMode) {
     if (this.running) return;
 
     // 隐藏所有模态框
@@ -171,25 +232,29 @@ class Game {
     if (authModal) authModal.classList.add('hidden');
     if (saveModal) saveModal.classList.add('hidden');
 
-    // 自动检测设备
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
-    this.deviceMode = isMobile ? 'mobile' : 'pc';
+    // 设备模式：以用户在存档模态框的选择为准，否则按 UA 兜底
+    if (deviceMode === 'pc' || deviceMode === 'mobile') {
+      this.deviceMode = deviceMode;
+    } else {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+      this.deviceMode = isMobile ? 'mobile' : 'pc';
+    }
+
+    // 同步更新 overlay 里的设备按钮状态（防止后续进入 overlay 路径不一致）
+    const pcBtn = document.querySelector('#deviceSelect [data-device=pc]');
+    const mobileBtn = document.querySelector('#deviceSelect [data-device=mobile]');
+    if (pcBtn && mobileBtn) {
+      if (this.deviceMode === 'mobile') mobileBtn.click(); else pcBtn.click();
+    }
 
     this.setupDeviceSelect();
     this.setupInput();
     this.buildUI();
 
-    // 自动应用设备模式 + 隐藏 overlay + 启动
-    const overlay = document.getElementById('overlay');
-    const pcBtn = document.querySelector('[data-device=pc]');
-    const mobileBtn = document.querySelector('[data-device=mobile]');
-    if (pcBtn && mobileBtn) {
-      if (isMobile) { mobileBtn.click(); } else { pcBtn.click(); }
-    }
-
     // 应用设备模式
     if (typeof this.applyDeviceMode === 'function') this.applyDeviceMode();
 
+    const overlay = document.getElementById('overlay');
     if (overlay) overlay.classList.add('hidden');
     this.start();
   }
