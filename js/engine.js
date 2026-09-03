@@ -77,16 +77,15 @@ class Game {
     function bindDeviceSelect() {
       if (dsPcBtn) dsPcBtn.onclick = () => setDevice('pc');
       if (dsMobileBtn) dsMobileBtn.onclick = () => setDevice('mobile');
-      // 默认高亮 UA 推荐项，但仍需用户点击确认（否则保持未选中状态）
+      // 默认直接选中「手机端」
+      setDevice('mobile');
+      // 保留 UA 提示作为参考
       const uaRec = detectUARecommend();
-      if (dsPcBtn) dsPcBtn.style.boxShadow = (uaRec === 'pc') ? '0 0 10px #6af' : '';
-      if (dsMobileBtn) dsMobileBtn.style.boxShadow = (uaRec === 'mobile') ? '0 0 10px #6af' : '';
-      if (dsHint) {
-        dsHint.innerHTML = `💡 检测到你使用 <b style="color:#fc2">${uaRec === 'mobile' ? '手机端' : '电脑端'}</b>，请点击上方确认`;
+      if (dsHint && uaRec === 'pc') {
+        dsHint.innerHTML = `（默认手机端） · 💡 UA 检测为电脑端，可切换到💻电脑端`;
+      } else if (dsHint) {
+        dsHint.textContent = '📱 竖握使用 · 画面旋转横屏 · 摇杆+攻击（默认手机端）';
       }
-      selectedDevice = null;
-      if (dsPcBtn) dsPcBtn.classList.remove('selected');
-      if (dsMobileBtn) dsMobileBtn.classList.remove('selected');
     }
 
     function requireDevice() {

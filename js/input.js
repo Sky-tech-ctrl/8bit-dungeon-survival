@@ -277,7 +277,7 @@ Game.prototype.setupVirtualPad = function() {
   const atkBtn = document.getElementById('attackBtn');
   if (!joyBase) return;
 
-  const RADIUS = 50;
+  const RADIUS = 82;
   let joyActive = false;
   let joyStartX = 0, joyStartY = 0;
   let joyTouchId = null;
