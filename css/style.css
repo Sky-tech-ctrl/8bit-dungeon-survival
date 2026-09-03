@@ -177,18 +177,53 @@ canvas {
   box-shadow: 0 0 30px rgba(80, 160, 255, 0.25), inset 0 0 40px rgba(0,0,0,0.6);
 }
 
-/* 建造选择弹窗 · 正方形网格布局（画布 960×720，菜单缩到 ~0.5 ≈ 340×310：
-   既保证 10 个房间完整一屏显示、文字/emoji 清晰可读，又不至于像原 680×620 那样覆盖画面大半）*/
+/* 建造选择弹窗 · 真实物理尺寸 500×480（不再用 transform scale 缩放下导致点击命中区域错乱）
+   - 4 列 × 3 行 Grid（1 行标题 + 3 行按钮），共 12 个单元放置 10 个房间按钮
+   - 画布 960×720：弹窗占约 52% 宽 / 67% 高，按钮 ~115×120，emoji 28px + 文字 + 价格都清晰可读
+   - 仅作用于 .build-grid（避免影响房间详情/铁匠铺弹窗）*/
 #buildMenu.build-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: auto repeat(3, 1fr);
-  gap: 8px;
-  width: 680px;
-  height: 620px;
+  gap: 6px;
+  width: 500px;
+  height: 480px;
+  max-width: 96%;
+  max-height: 96%;
   overflow: hidden;
-  transform: translate(-50%, -50%) scale(0.5);
-  transform-origin: center center;
+  padding: 10px;
+  border-width: 4px;
+  transform: translate(-50%, -50%);
+}
+/* 仅 build-grid 下的标题/按钮/价格做紧凑调优，不影响其它弹窗 */
+#buildMenu.build-grid .build-popup-title {
+  padding: 4px 6px 8px;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  border-bottom-width: 2px;
+  align-items: center;
+}
+#buildMenu.build-grid .build-popup-title button.close-popup {
+  font-size: 13px;
+  padding: 3px 10px;
+}
+#buildMenu.build-grid .build-btn {
+  padding: 5px 3px;
+  border-width: 2px;
+  font-size: 12px;
+  gap: 3px;
+  border-radius: 4px;
+  /* 物理按钮 115×120，移动端/鼠标点击都足够（Fitts 友好） */
+}
+#buildMenu.build-grid .build-btn .icon {
+  font-size: 28px;
+}
+#buildMenu.build-grid .build-btn .cost {
+  font-size: 11px;
+}
+#buildMenu.build-grid .build-btn.no-space::after {
+  bottom: -14px;
+  font-size: 10px;
 }
 
 /* 弹窗为空时不显示 */

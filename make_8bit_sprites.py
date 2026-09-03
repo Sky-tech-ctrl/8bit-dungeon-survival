@@ -53,240 +53,311 @@ def rect(d, x, y, w, h, col):
 
 
 # ============================================================
-#  ZOMBIE PVZ 风格：大头 72×128 帧 × 3
+#  ZOMBIE PVZ 风格（侧脸行走！） 72×128 帧 × 3
 # ============================================================
-def pvz_zombie_head(d, cx, top, variant):
-    """PVZ 风格：头大身小，略微歪头，红白眼，黄牙，脸颊腐斑 + 血痕，秃/几缕黑发"""
-    hw, hh = 36, 36           # PVZ 头占比大（原 22×24 → 36×36）
-    tilt = {'A':-2, 'B':2, 'L':-5}[variant]   # walk 轻歪 / attack 大歪
-    hx = cx - hw//2
+def profile_head(d, cx, top, variant):
+    """侧脸（面朝右）PVZ 丧尸：鼻尖凸→嘴前凸→下巴收→后脑勺圆
+       一眼、额顶乱发、颧骨黄腐斑+嘴角流血、牙齿参差外露"""
+    hw, hh = 34, 36
+    # 鼻尖在前边（画面右侧），头稍向画面右侧偏移 —— 鼻尖在 cx+16，后脑在 cx-18
+    # 头整体左右边界 cx-18 ~ cx+16 共 34 宽
+    hx_left  = cx - 18
+    hx_right = cx + 16   # 鼻尖在这条线右边突出
     hy = top
-    # 1) 头皮 & 头顶头发轮廓（PVZ 丧尸有些秃顶）
-    scalp_top = [
-        # (offset_in_hx, height)
-        (5, 2),(6, 3),(7, 5),(8, 5),(9, 6),(10, 7),(11, 7),
-        (24, 7),(25, 7),(26, 6),(27, 6),(28, 5),(29, 5),(30, 3),(31, 2)
+    tilt = {'A': -1, 'B': 1, 'L': -3}[variant]  # 走歪头，attack 大歪
+    hy_tilt = hy + tilt
+
+    # ------------ 头部轮廓侧面（从上到下描一圈，填充绿皮）-----------
+    # 后脑侧轮廓（左侧，从额头 top 往下顺耳后→颚）
+    skull_profile = [
+        # (offset_x_from_cx,  length,  top_offset)  => 画 vertical 段
+        (-18, 10, 0),   # 后脑最凹后：额头到耳上
+        (-19, 6,  10),  # 枕骨突出
+        (-18, 8,  16),  # 耳后回收
+        (-17, 8,  24),  # 颚
+        (-16, 4,  32),  # 下巴左侧收
     ]
-    for i, h in scalp_top:
-        px(d, hx+i, hy-h-1, 1, 1, OUTLINE)
-        px(d, hx+i, hy-h, 1, h, PVZ_HAIR)
-    # 整个脸外框描边 + 填充（绿死皮）
-    px(d, hx, hy-1, hw, 1, OUTLINE)
-    px(d, hx-1, hy, 1, hh-4, OUTLINE)
-    px(d, hx+hw, hy, 1, hh-4, OUTLINE)
-    px(d, hx+1, hy, hw-2, hh-4, PVZ_SKIN)
-    px(d, hx, hy+6, 1, hh-12, PVZ_SKIN)
-    px(d, hx+hw-1, hy+6, 1, hh-12, PVZ_SKIN)
-    # 下巴收
-    px(d, hx+1, hy+hh-4, hw-2, 2, PVZ_SKIN_M)
-    px(d, hx+2, hy+hh-2, hw-4, 1, PVZ_SKIN_D)
-    px(d, hx, hy+hh-3, hw, 1, OUTLINE)
+    for ox, ln, topy in skull_profile:
+        px(d, cx+ox, hy_tilt + topy, 1, ln, OUTLINE)
+        px(d, cx+ox + 1, hy_tilt + topy, 1, ln, PVZ_SKIN)
+    # 头顶（一条弧形，画短垂直段模拟头顶半圆）
+    top_arc = [
+        (-15, 4), (-12, 6), (-9, 8), (-6, 9), (-3, 10),
+        (0, 10),   (3, 10),  (6, 9),  (9, 8),  (12, 7),
+    ]
+    for ox, h in top_arc:
+        px(d, cx + ox, hy_tilt - h - 1, 1, 1, OUTLINE)
+        for yy in range(h):
+            px(d, cx + ox, hy_tilt - h + yy, 1, 1, PVZ_HAIR)
+    # 额到眉（顶部向下填充为皮肤，发梢在前额）
+    for x in range(-16, 14):
+        for y in range(0, 8):
+            if x < -6 and y < 3:
+                continue
+            if (x, y) == (-10, 2):
+                continue
+            px(d, cx + x, hy_tilt + y, 1, 1, PVZ_SKIN)
+    # 面部前侧（右侧）轮廓：从眉骨→鼻→鼻尖→鼻翼→上唇→下唇→下巴
+    face_profile = [
+        # 列，高度(从上到下数), 起始 y
+        (12, 4,  5),   # 额/眉骨向前伸
+        (13, 3,  9),   # 鼻梁起
+        (15, 2,  12),  # 鼻尖高点
+        (16, 2,  14),  # 鼻尖最高点（凸）
+        (15, 2,  16),  # 鼻翼下收
+        (13, 3,  18),  # 人中 - 上唇后收
+        (14, 6,  21),  # 嘴唇/嘴前凸（PVZ 龇牙咧嘴）
+        (12, 3,  27),  # 下唇收
+        (10, 4,  30),  # 下巴（短）
+        (7,  2,  34),  # 下巴尖收
+    ]
+    for ox, ln, topy in face_profile:
+        px(d, cx+ox, hy_tilt + topy, 1, ln, OUTLINE)
+        # 在该列的左侧（直到后脑列）都填绿皮。偷懒做法：直接填从左脑边界到此列
+        x_start = cx - 17 if topy < 10 else cx - 16
+        for xx in range(x_start, cx+ox):
+            if xx == cx - 17 and topy < 10: continue
+            if d and 0: pass  # noop
+            px(d, xx, hy_tilt + topy, 1, ln, PVZ_SKIN)
+    # 脖子后方（头部与西装之间）
+    for dy in range(4):
+        px(d, cx - 17, hy_tilt + hh - 4 + dy, 1, 1, OUTLINE)
+        px(d, cx - 16, hy_tilt + hh - 4 + dy, 1, 1, PVZ_SKIN)
+        px(d, cx - 15, hy_tilt + hh - 4 + dy, 1, 1, PVZ_SKIN_M)
 
-    # 歪头填充：脸颊左右不对称（增加腐烂视觉）
-    # 右脸颊大腐斑（PVZ 芥末黄）
-    for (bx,by, bw,bh, col, edge) in [
-        (23, 8, 9, 6, PVZ_ROT,   PVZ_ROT_D),  # 黄腐块 1
-        (4,  10, 6, 5, PVZ_SKIN_M, PVZ_SKIN_D), # 左脸阴影
-    ]:
-        px(d, hx+bx-1,   hy+by-1, bw+2, 1, OUTLINE)
-        px(d, hx+bx-1,   hy+by,   1,    bh, OUTLINE)
-        px(d, hx+bw+bx,  hy+by,   1,    bh, OUTLINE)
-        px(d, hx+bx-1,   hy+bh+by,bw+2, 1, OUTLINE)
-        px(d, hx+bx,     hy+by,   bw,   bh, col)
-        px(d, hx+bx,     hy+by,   bw,   1,  edge)
-    # 嘴角血痕（血往下滴）
-    px(d, hx+4, hy+26, 1, 7, PVZ_BLD); px(d, hx+3, hy+28, 1, 4, PVZ_BLD)
-    px(d, hx+hw-5, hy+27, 1, 6, PVZ_BLD)
+    # ------------ 细节：一眼（侧面椭圆） + 鼻 + 牙齿 + 腐斑 ----------
+    # 耳（后上方）
+    ear_x, ear_y = cx - 12, hy_tilt + 14
+    px(d, ear_x-1, ear_y-1, 6, 8, OUTLINE)
+    px(d, ear_x,   ear_y,   4, 6, PVZ_SKIN)
+    px(d, ear_x,   ear_y,   4, 1, PVZ_SKIN_M)
+    px(d, ear_x+1, ear_y+2, 2, 3, OUTLINE)
+    # 头发乱缕（后脑稀疏秃发 + 额前一撮）
+    for (ox,h) in [(-16,2),(-13,3),(-9,2),(-6,4),(-3,3),(3,2),(6,2),(9,1),(11,1)]:
+        px(d, cx+ox, hy_tilt - h - 2, 1, h+2, PVZ_HAIR)
+        px(d, cx+ox, hy_tilt - h - 3, 1, 1, OUTLINE)
 
-    # 眼窝深凹（大眼圈 PVZ 特征）
-    px(d, hx+3, hy+12, hw-6, 8, OUTLINE)
-    px(d, hx+4, hy+13, hw-8, 6, PVZ_SKIN_D)
-    # 眼睛（血红色带白眼白，PVZ 典型）
-    eye_y = hy + 14
-    if variant == 'L':  # attack：睁更大 + 血丝
-        px(d, hx+4,  eye_y-2, 10, 8, OUTLINE); px(d, hx+5,  eye_y-1, 8, 6, PVZ_EYE)
-        px(d, hx+7,  eye_y+1, 4, 3, PVZ_EYE_W)
-        px(d, hx+22, eye_y-2, 10, 8, OUTLINE); px(d, hx+23, eye_y-1, 8, 6, PVZ_EYE)
-        px(d, hx+25, eye_y+1, 4, 3, PVZ_EYE_W)
-        # 血丝（从眼内角延伸）
-        for dy in range(5):
-            px(d, hx+14+dy, eye_y+dy, 1, 1, PVZ_BLD)
-            px(d, hx+21-dy, eye_y+dy, 1, 1, PVZ_BLD)
+    # 眼（只有一只，侧面，稍扁）
+    eye_x, eye_y = cx + 2, hy_tilt + 11
+    if variant == 'L':  # 攻击：更大 + 血丝
+        px(d, eye_x-1, eye_y-1, 8, 7, OUTLINE)
+        px(d, eye_x,   eye_y,   6, 5, PVZ_EYE)
+        px(d, eye_x+3, eye_y+2, 2, 2, PVZ_EYE_W)
+        # 血丝
+        for dy in range(4):
+            px(d, eye_x-2+dy, eye_y+dy, 1, 1, PVZ_BLD)
     else:
-        for ex in (5, 23):
-            px(d, hx+ex,   eye_y,   8, 6, PVZ_EYE)
-            px(d, hx+ex+1, eye_y+1, 2, 3, PVZ_EYE_W)  # 小白瞳孔高光
-            px(d, hx+ex+5, eye_y+1, 2, 2, (0,0,0))    # 小黑瞳孔（PVZ 式）
-    # 鼻孔（黑孔）
-    px(d, hx+hw//2-3, hy+23, 1, 3, OUTLINE)
-    px(d, hx+hw//2+1, hy+23, 1, 3, OUTLINE)
+        px(d, eye_x,   eye_y,   6, 5, OUTLINE)
+        px(d, eye_x+1, eye_y+1, 4, 3, PVZ_EYE)
+        px(d, eye_x+3, eye_y+1, 2, 2, PVZ_EYE_W)
+        px(d, eye_x+3, eye_y+2, 1, 1, (0,0,0))  # 小瞳孔点
 
-    # 嘴（PVZ：大张，黄牙参差）
-    mouth_y = hy + 27
-    if variant == 'L':   # attack 张嘴更大，露獠牙
-        px(d, hx+3,  mouth_y-2, hw-6, 9, OUTLINE)
-        px(d, hx+4,  mouth_y-1, hw-8, 7, (40,20,20))   # 口腔深
-        # 上排黄尖牙（参差）
-        for (ox, w, h, col) in [(5,2,3,PVZ_TOOTH),(9,1,2,PVZ_TOOTH_D),(13,3,4,PVZ_TOOTH),(18,2,2,PVZ_TOOTH_D),(23,2,3,PVZ_TOOTH),(27,1,2,PVZ_TOOTH_D)]:
-            px(d, hx+ox, mouth_y-1, w, h, col)
-            px(d, hx+ox, mouth_y-1, w, 1, PVZ_TOOTH_D)
-        # 下排
-        for (ox, w, h, col) in [(6,2,2,PVZ_TOOTH),(11,3,3,PVZ_TOOTH_D),(17,2,2,PVZ_TOOTH),(21,2,3,PVZ_TOOTH),(26,2,2,PVZ_TOOTH_D)]:
-            px(d, hx+ox, mouth_y+4, w, h, col)
-    else:                # walk：抿嘴露 2 颗犬齿
-        px(d, hx+4,  mouth_y, hw-8, 4, OUTLINE)
-        px(d, hx+5,  mouth_y+1, hw-10, 2, PVZ_SHIRT_D)
-        # 2 颗标志性犬齿（PVZ）
-        px(d, hx+8,  mouth_y+1, 2, 3, PVZ_TOOTH)
-        px(d, hx+hw-10, mouth_y+1, 2, 3, PVZ_TOOTH)
-        px(d, hx+8,  mouth_y+3, 2, 1, PVZ_TOOTH_D)
-        px(d, hx+hw-10, mouth_y+3, 2, 1, PVZ_TOOTH_D)
+    # 鼻（侧面：鼻梁+鼻尖+鼻孔）
+    px(d, cx+10, hy_tilt+14, 1, 4, PVZ_SKIN_M)  # 鼻梁阴影
+    px(d, cx+11, hy_tilt+15, 1, 3, PVZ_SKIN_M)
+    px(d, cx+13, hy_tilt+17, 2, 1, PVZ_SKIN_D)  # 鼻尖下
+    px(d, cx+14, hy_tilt+18, 2, 2, OUTLINE)     # 鼻孔黑
+    px(d, cx+14, hy_tilt+19, 1, 1, (0,0,0))
 
-    # 几缕乱发 + 秃头皮（PVZ 丧尸通常不全秃，有碎黑发）
-    for (i, h) in [(4,2),(10,3),(12,2),(22,2),(24,3),(30,2),(32,2)]:
-        px(d, hx+i, hy-h-2, 1, 2, PVZ_HAIR)
+    # 颧骨大腐斑（芥末黄）+ 嘴角血滴
+    rot_x, rot_y = cx + 4, hy_tilt + 20
+    px(d, rot_x-1, rot_y-1, 10, 1, OUTLINE)
+    px(d, rot_x-1, rot_y,   1,  7, OUTLINE)
+    px(d, rot_x+9, rot_y,   1,  7, OUTLINE)
+    px(d, rot_x-1, rot_y+7, 10, 1, OUTLINE)
+    px(d, rot_x,   rot_y,   8,  7, PVZ_ROT)
+    px(d, rot_x,   rot_y,   8,  2, PVZ_ROT_D)
+    # 血滴（从嘴下滴到下巴）
+    for dy,col in [(0,PVZ_BLD),(1,PVZ_BLD),(2,PVZ_BLD),(3,PVZ_BLD),(4,PVZ_BLD_D)]:
+        px(d, cx+11, hy_tilt+28+dy, 1, 1, col)
+    for dy,col in [(1,PVZ_BLD),(2,PVZ_BLD),(3,PVZ_BLD_D)]:
+        px(d, cx+12, hy_tilt+28+dy, 1, 1, col)
 
-    return hy + hh  # head_bottom
+    # 嘴 & 牙齿（侧面大龇牙，参差黄牙）
+    mouth_y = hy_tilt + 23
+    # 嘴唇外框
+    px(d, cx+10, mouth_y-1,   7, 1, OUTLINE)
+    px(d, cx+9,  mouth_y,     1, 6, OUTLINE)
+    px(d, cx+16, mouth_y,     1, 6, OUTLINE)
+    px(d, cx+10, mouth_y+6,   7, 1, OUTLINE)
+    px(d, cx+10, mouth_y,     6, 6, (40,20,20))  # 口腔暗
+    if variant == 'L':  # attack：露大牙 + 咬
+        for (ox,w,h,col) in [
+            (10,1,3,PVZ_TOOTH),(11,2,4,PVZ_TOOTH),(13,1,2,PVZ_TOOTH_D),
+            (14,2,5,PVZ_TOOTH),
+        ]:
+            px(d, cx+ox, mouth_y-1, w, h, col); px(d, cx+ox, mouth_y-1, w, 1, PVZ_TOOTH_D)
+        for (ox,w,h,col) in [
+            (10,2,2,PVZ_TOOTH),(12,1,3,PVZ_TOOTH_D),(13,2,3,PVZ_TOOTH),(15,1,2,PVZ_TOOTH),
+        ]:
+            px(d, cx+ox, mouth_y+4, w, h, col); px(d, cx+ox, mouth_y+4, w, 1, PVZ_TOOTH_D)
+    else:
+        # walk：上下交错尖牙（像 PVZ 走路时牙齿一张一合）
+        if variant == 'A':
+            for (ox,w,h,col) in [(10,1,3,PVZ_TOOTH),(12,2,3,PVZ_TOOTH),(15,1,2,PVZ_TOOTH_D)]:
+                px(d, cx+ox, mouth_y, w, h, col); px(d, cx+ox, mouth_y, w, 1, PVZ_TOOTH_D)
+        else:  # B 帧：牙齿在下部
+            for (ox,w,h,col) in [(11,2,3,PVZ_TOOTH),(14,1,2,PVZ_TOOTH_D),(15,1,2,PVZ_TOOTH)]:
+                px(d, cx+ox, mouth_y+3, w, h, col); px(d, cx+ox, mouth_y+3, w, 1, PVZ_TOOTH_D)
+
+    return hy_tilt + hh  # head_bottom（下巴底）
 
 
-def pvz_zombie_body(d, cx, hb, variant):
-    """PVZ 丧尸：黑西装外套 + 白衬衫（很脏）+ 撕裂红领带，手臂永远前扑"""
-    bw = 30; bx = cx - bw//2
-    shift = {'A':-1, 'B':1, 'L':3}[variant]  # attack 向前倾
-    jt = hb + 2; jh = 30
+def profile_body(d, cx, hb, variant):
+    """侧脸身体（面朝右）：
+       - 近肩（右）比远肩（左）靠前且稍大
+       - 西装翻领在右侧近景可见
+       - 手臂：近（右）手在前摆动 / 远（左）手在后被身体遮挡
+       - 两腿交替前后（侧面步姿有交错差）
+       - attack：前弓步 + 前手抓扑，指甲向前伸"""
+    bw = 26; bx = cx - bw//2 - 2     # 身体整体略向画面左（后脑方向）偏，让右肩（近侧）有空间向前
+    body_shift = {'A':-1,'B':1,'L':2}[variant]
+    bx_b = bx + body_shift          # 身体 X 基准
+    jt = hb + 2; jh = 28            # 衣身起 y / 高
 
-    # 脖子（PVZ 细长歪颈：从下巴下面接衣领）
-    px(d, cx-4+shift, hb-1, 9, 7, OUTLINE)
-    px(d, cx-3+shift, hb,   7, 6, PVZ_SKIN)
-    px(d, cx-3+shift, hb+3, 7, 2, PVZ_SKIN_M)
-    # 领带从脖子下挂
-    tie_x = cx - 2 + shift
-    px(d, tie_x, hb+4, 4, 4, PVZ_TIE)
-    px(d, tie_x+1, hb+5, 2, 3, OUTLINE)
+    # 脖子（侧面可见一条从后脑到西装领）
+    neck_x = cx - 15
+    px(d, neck_x-1, hb-1, 8, 1, OUTLINE)
+    px(d, neck_x,   hb,   7, 4, PVZ_SKIN)
+    px(d, neck_x,   hb+1, 7, 1, PVZ_SKIN_M)
+    # 领带（侧，只显示一小段）
+    tie_x = cx + 1
+    px(d, tie_x-1, hb+4, 4, 3, OUTLINE)
+    px(d, tie_x,   hb+4, 3, 2, PVZ_TIE)
     px(d, tie_x-1, hb+7, 6, 1, OUTLINE)
-    px(d, tie_x,   hb+8, 4, 16, PVZ_TIE)
-    px(d, tie_x+1, hb+8, 2, 16, PVZ_SUIT_D)  # 领带阴影
+    px(d, tie_x,   hb+7, 4, 16, PVZ_TIE)
+    px(d, tie_x+2, hb+7, 2, 16, PVZ_SUIT_D)
 
-    # 西装外框（PVZ 黑西装，单扣）
-    for (ox,oy,ow,oh,col) in [
-        (bx-2, jt-1, bw+4, 1, OUTLINE),
-        (bx-2, jt,   1,    jh+5, OUTLINE),
-        (bx+bw+1, jt, 1,    jh+5, OUTLINE),
-        (bx-1, jt+jh+4, bw+2, 1, OUTLINE),
-    ]:
-        px(d, ox,oy,ow,oh,col)
-    px(d, bx-1, jt, bw+2, jh+4, PVZ_SUIT)
-    px(d, bx-1, jt, 1, jh+4, PVZ_SUIT_D)  # 左肩阴影
-    px(d, bx+bw, jt, 1, jh+4, PVZ_SUIT_D) # 右肩阴影
+    # 西装（侧面：背平直、前面略凸，单扣）
+    # 后背线
+    for y in range(jh+6):
+        px(d, bx_b-1, jt+y, 1, 1, OUTLINE)
+        px(d, bx_b,   jt+y, 1, 1, PVZ_SUIT_D if y < jh else PVZ_PANT_D)
+    # 前襟线（近侧）
+    front_x = bx_b + bw + 2
+    for y in range(jh+4):
+        # 前襟有 2 段凸：胸 + 腹
+        bulge = 0
+        if 6 < y < 16: bulge = 1
+        if y > 22:   bulge = -1
+        px(d, front_x + bulge, jt+y, 1, 1, OUTLINE)
+        px(d, front_x + bulge - 1, jt+y, 1, 1, PVZ_SUIT)
+    # 顶部线（肩）+ 底部线（下摆）
+    for x in range(bx_b - 1, front_x + 3):
+        px(d, x, jt - 1, 1, 1, OUTLINE)
+        px(d, x, jt,      1, 1, PVZ_SUIT_D if x < cx else PVZ_SUIT)
+        px(d, x, jt + jh + 3, 1, 1, OUTLINE)
+        if x > bx_b and x < front_x + 2:
+            px(d, x, jt + jh, 1, 1, PVZ_SUIT_D)
+    # 翻领（近侧一条斜线，三角形）
+    for i in range(8):
+        px(d, cx + i, jt + 2 + i, 1, 1, PVZ_SUIT_D)
+        px(d, cx + 1 + i, jt + 2 + i, 1, 1, PVZ_SHIRT)
+    # 衬衫（领口下白色小三角，侧面缩窄）
+    for i in range(10):
+        px(d, cx + 2, jt + 4 + i, 6 - i//3, 1, PVZ_SHIRT)
+    # 西装大扣（侧面 1 个）
+    px(d, cx - 5, jt + 18, 4, 3, OUTLINE)
+    px(d, cx - 4, jt + 19, 2, 1, (200,180,120))
 
-    # V 领白衬衫（西装开口处露出）
-    shirt_top, shirt_h = jt + 1, jh - 8
-    # 西装翻领
-    for side in (-1, 1):
-        for i in range(10):
-            px(d, cx + side*(1+i), jt+i, 1, 1, PVZ_SUIT_D)
-    # 衬衫三角区
-    for i in range(shirt_h):
-        sw = 10 - i//4
-        px(d, cx - sw, jt+2+i, sw*2, 1, PVZ_SHIRT)
-    # 西装大扣
-    px(d, cx-2, jt + 16, 4, 3, OUTLINE)
-    px(d, cx-1, jt + 17, 2, 1, (200,180,120))
+    # 破洞 & 血迹
+    # 肩破（近肩）
+    px(d, front_x - 5, jt + 2, 7, 5, OUTLINE)
+    px(d, front_x - 4, jt + 3, 5, 3, PVZ_SKIN_D)
+    for (ox, oy, c) in [(front_x - 4, jt + 3, PVZ_BLD), (front_x - 2, jt + 5, PVZ_BLD)]:
+        px(d, ox, oy, 1, 1, c)
+    # 下摆锯齿撕裂
+    for i in range(3):
+        px(d, bx_b + 4 + i*9, jt + jh + 1, 3, 5, TRANSP)
+        px(d, bx_b + 4 + i*9, jt + jh + 1, 1, 5, OUTLINE)
+        px(d, bx_b + 6 + i*9, jt + jh + 1, 1, 5, OUTLINE)
+    # 西装正面血滴飞溅
+    for (ox_rel, oy_rel, c) in [(4,6,PVZ_BLD),(5,8,PVZ_BLD),(9,14,PVZ_BLD_D),(13,10,PVZ_BLD),(14,12,PVZ_BLD)]:
+        px(d, bx_b + bw - 2 + ox_rel//2, jt + oy_rel, 1, 1, c)
 
-    # 破洞 & 血迹（PVZ 特征）
-    # 右肩撕裂露白骨
-    px(d, bx, jt+2, 7, 5, OUTLINE)
-    px(d, bx+1, jt+3, 5, 3, PVZ_SKIN_D)
-    for (ox,oy,c) in [(bx+2,jt+3,PVZ_BLD),(bx+4,jt+5,PVZ_BLD),(bx+1,jt+4,PVZ_BLD)]:
-        px(d,ox,oy,1,1,c)
-    # 西装下摆锯齿撕裂
-    for i in range(6):
-        if i % 2 == 0:
-            px(d, bx+2+i*5, jt+jh+1, 3, 4, TRANSP)
-            px(d, bx+2+i*5, jt+jh+1, 1, 4, OUTLINE)
-            px(d, bx+4+i*5, jt+jh+1, 1, 4, OUTLINE)
-    # 血迹飞溅（西装前）
-    for (ox,oy,c) in [(12,10,PVZ_BLD),(13,11,PVZ_BLD),(16,15,PVZ_BLD_D),(19,12,PVZ_BLD),(20,13,PVZ_BLD),(17,18,PVZ_BLD)]:
-        px(d, bx+ox, jt+oy, 1, 1, c)
-
-    # 手臂：永远前伸（PVZ 经典姿势），attack 时双手向前抓
+    # ---- 手臂（侧脸：近手在右前方，远手在左后方被遮小一部分） ----
     ay = jt + 4
     if variant == 'A':
-        arm_r = ((bx+bw+0, ay-2,   6, 8),  (bx+bw+6, ay+3,  7, 18))  # 右前上+下臂
-        arm_l = ((bx-6,   ay+1,   6, 7),  (bx-10, ay+6,   7, 16))
+        near_arm = ((front_x + 1, ay - 1, 5, 8),  (front_x + 5, ay + 3,  6, 18))
+        far_arm  = ((bx_b - 4,   ay + 2, 5, 7),  (bx_b - 9,   ay + 7,  6, 14))
     elif variant == 'B':
-        arm_r = ((bx+bw+0, ay+1,   6, 7),  (bx+bw+4, ay+5,  7, 17))
-        arm_l = ((bx-6,   ay-2,   6, 8),  (bx-11, ay+3,   7, 18))
-    else:  # L attack：双手冲刺前扑，更长更前
-        arm_r = ((bx+bw+1, ay-4,   7, 9),  (bx+bw+9, ay+1,  10, 22))
-        arm_l = ((bx-8,   ay-4,   7, 9),  (bx-19, ay+1,    10, 22))
-    for (sx, sy, sw, sh), (ux, uy, uw, uh) in [arm_r, arm_l]:
-        rect(d, sx-1,   sy-1, sw+2, sh+2, OUTLINE)
-        rect(d, sx,     sy,   sw,   sh,   PVZ_SUIT_D if variant == 'A' and (sx>cx) else PVZ_SUIT)
-        rect(d, ux-1,   uy-1, uw+2, uh+2, OUTLINE)
-        rect(d, ux,     uy,   uw,   uh,   PVZ_SKIN)
-        rect(d, ux,     uy,   uw,   1,    PVZ_SKIN_M)   # 上臂阴影
-        rect(d, ux,     uy+uh-3, uw,  3,  PVZ_SKIN_M)   # 手腕关节
-        # 手 + PVZ 长黄指甲（抓爪形）
+        near_arm = ((front_x + 0, ay + 1, 5, 7),  (front_x + 3, ay + 5,  6, 17))
+        far_arm  = ((bx_b - 4,   ay - 1, 5, 8),  (bx_b - 10,  ay + 4,  6, 17))
+    else:  # L 攻击：近手大力前扑（指甲突出）
+        near_arm = ((front_x + 2, ay - 3, 6, 9),  (front_x + 11, ay + 2,  9, 24))
+        far_arm  = ((bx_b - 6,   ay - 2, 5, 8),  (bx_b - 14,  ay + 2,  7, 18))
+    for (sx, sy, sw, sh), (ux, uy, uw, uh) in [near_arm, far_arm]:
+        rect(d, sx-1, sy-1, sw+2, sh+2, OUTLINE)
+        rect(d, sx, sy, sw, sh, PVZ_SUIT_D if (variant == 'B' and sx < cx) else PVZ_SUIT)
+        rect(d, ux-1, uy-1, uw+2, uh+2, OUTLINE)
+        rect(d, ux, uy, uw, uh, PVZ_SKIN)
+        rect(d, ux, uy, uw, 1, PVZ_SKIN_M)
+        rect(d, ux, uy+uh-3, uw, 3, PVZ_SKIN_M)
+        # 手 + 指甲
         hx_, hy_ = ux, uy + uh
         if variant == 'L':
             rect(d, hx_-2, hy_-1, uw+4, 9, OUTLINE)
-            rect(d, hx_-1, hy_,   uw+2, 7, PVZ_SKIN)
-            # 5 根参差指甲（每根 1~2 宽）
-            for (ox, ow, oh, col) in [(-1,1,3,PVZ_NAIL),(1,2,4,PVZ_NAIL),(4,2,5,PVZ_NAIL_D),(7,2,4,PVZ_NAIL),(9,1,3,PVZ_NAIL_D)]:
+            rect(d, hx_-1, hy_, uw+2, 7, PVZ_SKIN)
+            # 指甲向前（右）突出 —— 侧面攻击爪
+            for (ox, ow, oh, col) in [(uw,2,5,PVZ_NAIL),(uw+1,1,4,PVZ_NAIL_D)]:
+                px(d, hx_+ox, hy_+3, ow, oh, col); px(d, hx_+ox, hy_+3, ow, 1, PVZ_NAIL_D)
+            for (ox, ow, oh, col) in [(2,2,4,PVZ_NAIL_D),(5,2,3,PVZ_NAIL)]:
                 px(d, hx_+ox, hy_+6, ow, oh, col)
-                px(d, hx_+ox, hy_+6, ow, 1, PVZ_NAIL_D)
         else:
             rect(d, hx_-1, hy_-1, uw+2, 7, OUTLINE)
-            rect(d, hx_,   hy_,   uw,   5, PVZ_SKIN)
-            # 3 根短指甲
-            for (ox, ow) in [(0,2),(3,2),(6,2)]:
-                px(d, hx_+ox, hy_+4, ow, 2, PVZ_NAIL)
-                px(d, hx_+ox, hy_+4, ow, 1, PVZ_NAIL_D)
+            rect(d, hx_, hy_, uw, 5, PVZ_SKIN)
+            # 2~3 根指甲向前（右）
+            for (ox, ow, oh) in [(uw,1,3),(uw-2,1,2)]:
+                px(d, hx_+ox, hy_+3, ow, oh, PVZ_NAIL); px(d, hx_+ox, hy_+3, ow, 1, PVZ_NAIL_D)
+            if variant == 'A':
+                px(d, hx_+1, hy_+4, 1, 2, PVZ_NAIL_D)
 
-    # 裤腿 + PVZ 黑色西裤 + 破洞
+    # ---- 裤腿（侧面步姿：两脚在 X 方向前后错开 + 纵向高低差） ----
     pt = jt + jh + 1; ph = 32; lw = bw//2
-    if variant == 'A':
-        # 左脚前
-        lx, rx = bx, bx + bw - lw
-        rect(d, lx-1,  pt-1, lw+2, 12, OUTLINE); px(d, lx,   pt,   lw, 11, PVZ_PANT)
-        rect(d, lx-2,  pt+10, lw+3, 14, OUTLINE); px(d, lx-1, pt+11, lw+2, 13, PVZ_PANT_D)
-        fx,fy = lx-4, pt + ph - 4
-        rect(d, fx-1, fy-1, lw+6, 6, OUTLINE); px(d, fx, fy, lw+5, 4, PVZ_SUIT); px(d, fx, fy+4, lw+5, 1, OUTLINE)
-        # 右脚后
-        rect(d, rx,   pt+2, lw,   10, OUTLINE); px(d, rx+1, pt+3, lw-1, 9, PVZ_PANT_D)
-        fx2,fy2 = rx, pt+ph-3
-        rect(d, fx2-1, fy2-1, lw, 5, OUTLINE); px(d, fx2, fy2, lw-1, 3, PVZ_SUIT_D)
-    elif variant == 'B':
-        lx, rx = bx, bx + bw - lw
-        rect(d, rx,   pt-1, lw+2, 12, OUTLINE); px(d, rx+1, pt,   lw, 11, PVZ_PANT)
-        rect(d, rx-1, pt+10, lw+3, 14, OUTLINE); px(d, rx,   pt+11, lw+2, 13, PVZ_PANT_D)
-        fx,fy = rx-2, pt + ph - 4
-        rect(d, fx-1, fy-1, lw+6, 6, OUTLINE); px(d, fx, fy, lw+5, 4, PVZ_SUIT)
-        # 左脚后
-        rect(d, lx,   pt+2, lw,   10, OUTLINE); px(d, lx+1, pt+3, lw-1, 9, PVZ_PANT_D)
-        fx2,fy2 = lx, pt+ph-3
-        rect(d, fx2-1, fy2-1, lw, 5, OUTLINE); px(d, fx2, fy2, lw-1, 3, PVZ_SUIT_D)
-    else:  # L: 攻击冲刺弓步
-        stance = 3
-        lx, rx = bx - stance, bx + bw - lw + stance
-        rect(d, lx-1, pt-2, lw+2, 14, OUTLINE); px(d, lx, pt-1, lw, 13, PVZ_PANT)
-        rect(d, lx-2, pt+11, lw+3, 15, OUTLINE); px(d, lx-1, pt+12, lw+2, 14, PVZ_PANT_D)
-        fx,fy = lx-5, pt + ph - 3
-        rect(d, fx-1, fy-1, lw+7, 7, OUTLINE); px(d, fx, fy, lw+6, 5, PVZ_SUIT)
-        px(d, fx, fy+5, lw+6, 1, OUTLINE)
-        # 后脚弯
-        rect(d, rx-1, pt+1, lw+2, 12, OUTLINE); px(d, rx, pt+2, lw, 11, PVZ_PANT_D)
-        fx2,fy2 = rx-1, pt+ph-1
-        rect(d, fx2-1, fy2-1, lw+4, 5, OUTLINE); px(d, fx2, fy2, lw+3, 3, PVZ_SUIT_D)
+    if variant == 'A':    # 前右脚（近前），后左脚（远后）
+        # 前腿（近）: x 靠近 front_x ，稍长
+        leg_fx, leg_fy = front_x - 8, pt
+        rect(d, leg_fx-1, leg_fy-1, lw+1, 12, OUTLINE); px(d, leg_fx, leg_fy, lw-1, 11, PVZ_PANT)
+        rect(d, leg_fx-2, leg_fy+10, lw+2, 15, OUTLINE); px(d, leg_fx-1, leg_fy+11, lw+1, 14, PVZ_PANT_D)
+        fx_f, fy_f = leg_fx - 3, pt + ph - 5
+        rect(d, fx_f-1, fy_f-1, lw+6, 7, OUTLINE); px(d, fx_f, fy_f, lw+5, 5, PVZ_SUIT); px(d, fx_f, fy_f+5, lw+5, 1, OUTLINE)
+        # 后腿（远）: x 靠近 bx_b，略短略高（离地假象）
+        leg_rx, leg_ry = bx_b + 2, pt + 2
+        rect(d, leg_rx-1, leg_ry-1, lw, 10, OUTLINE); px(d, leg_rx, leg_ry, lw-1, 9, PVZ_PANT_D)
+        fx_r, fy_r = leg_rx - 1, pt + ph - 2
+        rect(d, fx_r-1, fy_r-1, lw+1, 5, OUTLINE); px(d, fx_r, fy_r, lw, 3, PVZ_SUIT_D)
+    elif variant == 'B':  # 前左脚（远前），后右脚（近后）—— 侧身换脚
+        leg_fx, leg_fy = bx_b + 3, pt
+        rect(d, leg_fx-1, leg_fy-1, lw, 12, OUTLINE); px(d, leg_fx, leg_fy, lw-1, 11, PVZ_PANT)
+        rect(d, leg_fx-2, leg_fy+10, lw+1, 15, OUTLINE); px(d, leg_fx-1, leg_fy+11, lw, 14, PVZ_PANT_D)
+        fx_f, fy_f = leg_fx - 3, pt + ph - 5
+        rect(d, fx_f-1, fy_f-1, lw+5, 7, OUTLINE); px(d, fx_f, fy_f, lw+4, 5, PVZ_SUIT)
+        # 后腿（近后，右脚）
+        leg_rx, leg_ry = front_x - 7, pt + 2
+        rect(d, leg_rx-1, leg_ry-1, lw+1, 10, OUTLINE); px(d, leg_rx, leg_ry, lw, 9, PVZ_PANT_D)
+        fx_r, fy_r = leg_rx - 2, pt + ph - 2
+        rect(d, fx_r-1, fy_r-1, lw+3, 5, OUTLINE); px(d, fx_r, fy_r, lw+2, 3, PVZ_SUIT_D)
+    else:  # L 攻击弓步：前腿（近）屈膝弓步 90°，后腿蹬地
+        leg_fx, leg_fy = front_x - 9, pt
+        rect(d, leg_fx-2, leg_fy-2, lw+3, 14, OUTLINE); px(d, leg_fx-1, leg_fy-1, lw+2, 13, PVZ_PANT)
+        # 小腿向前折 90°（水平伸出）
+        shin_x, shin_y = leg_fx + 2, pt + 14
+        rect(d, shin_x-1, shin_y-1, lw+8, 6, OUTLINE); px(d, shin_x, shin_y, lw+7, 4, PVZ_PANT_D)
+        fx_f, fy_f = shin_x + lw + 5, pt + ph - 6
+        rect(d, fx_f-1, fy_f-1, lw+6, 8, OUTLINE); px(d, fx_f, fy_f, lw+5, 6, PVZ_SUIT)
+        px(d, fx_f, fy_f+6, lw+5, 1, OUTLINE)
+        # 后腿（远）斜直蹬
+        leg_rx, leg_ry = bx_b + 3, pt + 3
+        rect(d, leg_rx-1, leg_ry-1, lw, 14, OUTLINE); px(d, leg_rx, leg_ry, lw-1, 13, PVZ_PANT_D)
+        fx_r, fy_r = leg_rx - 4, pt + ph - 1
+        rect(d, fx_r-1, fy_r-1, lw+3, 5, OUTLINE); px(d, fx_r, fy_r, lw+2, 3, PVZ_SUIT_D)
 
-    # 裤子破洞 + 露骨
-    for (lx_, ly_, lw_, lh_) in [(bx+2, pt+15, 4, 3), (bx+bw-8, pt+20, 5, 4)]:
+    # 裤子破洞 + 露骨（小腿各一个）
+    for (lx_, ly_, lw_, lh_) in [(front_x - 7, pt+16, 4, 3), (bx_b + 4, pt+20, 4, 3)]:
         px(d, lx_-1, ly_-1, lw_+2, 1, OUTLINE)
         px(d, lx_-1, ly_,   1,    lh_, OUTLINE)
         px(d, lx_+lw_, ly_,  1,   lh_, OUTLINE)
         px(d, lx_-1, ly_+lh_, lw_+2, 1, OUTLINE)
-        # 白骨/绿腐
         px(d, lx_,   ly_,   lw_,   lh_, PVZ_SKIN_D)
         px(d, lx_+1, ly_+1, lw_-2, 1,   (230, 224, 180))
 
@@ -297,12 +368,12 @@ def render_zombie_sheet(path):
     d = ImageDraw.Draw(img)
     for fi, v in enumerate(['A', 'B', 'L']):
         cx = fi*FW + FW//2
-        hb = pvz_zombie_head(d, cx, 4, v)
-        pvz_zombie_body(d, cx, hb, v)
+        hb = profile_head(d, cx, 6, v)
+        profile_body(d, cx, hb, v)
     img.save(path, "PNG", optimize=True)
     fw = img.size[0]/3
     valid = 10 <= fw <= 200 and 10 <= img.size[1] <= 200
-    print(f"🧟 zombie(PVZ): {img.size}  frame {fw:.0f}x{img.size[1]}  valid={valid}")
+    print(f"🧟 zombie(PVZ-profile): {img.size}  frame {fw:.0f}x{img.size[1]}  valid={valid}")
 
 
 # ============================================================
