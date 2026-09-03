@@ -462,16 +462,30 @@ body.mobile-mode .build-btn .cost { font-size: 8px; margin-top: 1px; }
   width: 100dvw;
   height: 100vh;
   height: 100dvh;
-  z-index: 50;
+  z-index: 9999;          /* 极端高 z-index，避免任何内容遮挡 */
   pointer-events: none;
+  /* 默认隐藏；当进入手机端模式（body.mobile-mode）时由CSS规则强制显示，
+     不依赖 JS 的 vpad.style.display 设置 —— 彻底解决"虚拟按键消失" */
+  display: none;
+}
+/* 【核心兜底】只要 body 上有 mobile-mode 类，虚拟按键就必须可见，
+   且 !important 覆盖任何 JS 设置的 inline style */
+body.mobile-mode #virtualPad {
+  display: block !important;
+}
+/* PC 模式（无 mobile-mode）下，虚拟按键隐藏（防残留） */
+body:not(.mobile-mode) #virtualPad {
+  display: none !important;
 }
 
 #joyBase {
   position: absolute;
-  bottom: 30px;
-  left: 30px;
-  width: 220px;
-  height: 220px;
+  /* 使用 clamp() 让摇杆在小屏幕上自动收缩 + 安全内边距，避免贴边/出屏 */
+  --joy-size: clamp(120px, 30vmin, 240px);
+  bottom: clamp(16px, 4vmin, 36px);
+  left:   clamp(16px, 4vmin, 36px);
+  width:  var(--joy-size);
+  height: var(--joy-size);
   border-radius: 50%;
   background: rgba(40,40,60,0.6);
   border: 4px solid rgba(180,180,255,0.5);
@@ -482,8 +496,11 @@ body.mobile-mode .build-btn .cost { font-size: 8px; margin-top: 1px; }
 #joyStick {
   position: absolute;
   top: 50%; left: 50%;
-  width: 96px; height: 96px;
-  margin-left: -48px; margin-top: -48px;
+  --stick-size: calc(var(--joy-size) * 0.44);
+  width:  var(--stick-size);
+  height: var(--stick-size);
+  margin-left: calc(var(--stick-size) / -2);
+  margin-top:  calc(var(--stick-size) / -2);
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, #b8e4ff, #48b3ff 60%, #2578cf);
   border: 4px solid #c7e6ff;
@@ -492,14 +509,17 @@ body.mobile-mode .build-btn .cost { font-size: 8px; margin-top: 1px; }
 
 #attackBtn {
   position: absolute;
-  top: 40px;
-  left: 40px;
-  width: 170px; height: 170px;
+  /* 攻击键默认放右上角：手机端横屏旋转 90° 后，对应拇指自然触达区（物理右下） */
+  --atk-size: clamp(100px, 26vmin, 180px);
+  top:    clamp(16px, 4vmin, 40px);
+  right:  clamp(16px, 4vmin, 40px);
+  width:  var(--atk-size);
+  height: var(--atk-size);
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, #ffc8c8, #e0603f 60%, #b02020);
   border: 5px solid #ffa0a0;
   color: #fff;
-  font-size: 72px;
+  font-size: calc(var(--atk-size) * 0.44);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -511,7 +531,7 @@ body.mobile-mode .build-btn .cost { font-size: 8px; margin-top: 1px; }
 }
 #attackBtn:active { transform: scale(0.94); filter: brightness(1.2); }
 
-/* 手机横屏旋转之后，物理左下=画面左下，物理右下=画面右下，摇杆/攻击键位置合适 */
+/* 手机横屏旋转之后，物理左下=画面左下，物理右上=画面右下，摇杆/攻击键都在拇指区 */
 
 /* ==================== 消息日志 ==================== */
 #messageLog {

@@ -277,12 +277,22 @@ Game.prototype.setupVirtualPad = function() {
   const atkBtn = document.getElementById('attackBtn');
   if (!joyBase) return;
 
-  const RADIUS = 82;
+  // 动态计算摇杆 RADIUS：joyBase 现在由 clamp() 自适应尺寸，
+  // 顶盘最大位移 = (底盘宽度 - 顶盘宽度) / 2，保证顶盘永远不超出底盘边界
+  function calcRadius() {
+    const baseRect = joyBase.getBoundingClientRect();
+    const stickRect = joyStick.getBoundingClientRect();
+    const baseW = baseRect.width || joyBase.offsetWidth;
+    const stickW = stickRect.width || joyStick.offsetWidth;
+    return Math.max(20, (baseW - stickW) / 2);
+  }
+
   let joyActive = false;
   let joyStartX = 0, joyStartY = 0;
   let joyTouchId = null;
 
   const moveStick = (dx, dy) => {
+    const RADIUS = calcRadius();
     const d = Math.sqrt(dx*dx + dy*dy);
     let rx = dx, ry = dy;
     if (d > RADIUS) { rx = dx * RADIUS / d; ry = dy * RADIUS / d; }
