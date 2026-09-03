@@ -933,10 +933,16 @@ Game.prototype.drawZombie = function(ctx, z) {
 
   // 精灵图（3 帧 idle/walk/attack）
   const zspr = this.assets.get('zombie_sprite');
-  if (zspr) {
+  // 校验 sprite 有效性：3帧单张宽度应该 < 500px（fw ≈ naturalWidth/3）。
+  // 如果当前 zombie_sprite.png 是明显错误的大尺寸（1680×2240 那种）或尺寸异常，
+  // 就跳过 sprite 路径，直接用下方代码绘制 fallback（也就是"原来那版"手绘丧尸，正常显示正常颜色）。
+  const zombieFw = zspr ? (zspr.naturalWidth / 3) : 0;
+  const zombieFh = zspr ? zspr.naturalHeight : 0;
+  const spriteValid = !!(zspr && zombieFw >= 10 && zombieFw <= 200 && zombieFh >= 10 && zombieFh <= 200);
+  if (spriteValid) {
     const frames = 3;
-    const fw = zspr.naturalWidth / frames;
-    const fh = zspr.naturalHeight;
+    const fw = zombieFw;
+    const fh = zombieFh;
     let fi = 0;
     if (z.attackAnim > 0.4) fi = 2;
     else if (Math.abs(z.walkAnim) > 0.3) fi = 1;
@@ -950,10 +956,8 @@ Game.prototype.drawZombie = function(ctx, z) {
     }
     ctx.drawImage(zspr, fi*fw, 0, fw, fh, -tw/2, -th+10, tw, th);
     ctx.restore();
-  }
-
-  if (!zspr) {
-    // 代码绘制 fallback
+  } else {
+    // —— 代码绘制（"原来那版"：绿正常 / 深绿快 / 灰紫坦克，颜色正确，尺寸可调）
     const legOffset = Math.sin(z.walkAnim)*3;
     ctx.fillStyle = bodyDark;
     ctx.fillRect(-5, -4-legOffset, 4, 10+legOffset);

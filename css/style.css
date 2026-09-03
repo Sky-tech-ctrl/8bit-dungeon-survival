@@ -207,17 +207,19 @@ canvas {
 
 .build-btn {
   background: #2a2a2a;
-  border: 3px solid #555;
+  border: 4px solid #555;
   color: #fff;
-  padding: 8px 10px;
+  padding: 18px 30px;
   font-family: 'Courier New', monospace;
-  font-size: 11px;
+  font-size: 20px;
   cursor: pointer;
   text-align: center;
-  min-width: 90px;
+  min-width: 200px;
+  min-height: 120px;
   transition: all 0.1s;
-  text-shadow: 1px 1px 0 #000;
+  text-shadow: 2px 2px 0 #000;
   flex-shrink: 0;
+  font-weight: bold;
 }
 
 .build-btn:hover:not(:disabled):not(.no-space) {
@@ -229,7 +231,7 @@ canvas {
 .build-btn.active {
   background: #5a3a3a;
   border-color: #f88;
-  box-shadow: 0 0 10px #f55;
+  box-shadow: 0 0 16px #f55;
 }
 
 .build-btn:disabled,
@@ -242,23 +244,26 @@ canvas {
 .build-btn.no-space::after {
   content: '空间不足';
   position: absolute;
-  bottom: -16px;
+  bottom: -22px;
   left: 50%;
   transform: translateX(-50%);
   color: #f88;
-  font-size: 9px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
 .build-btn .cost {
   color: #ffcc44;
-  font-size: 10px;
-  margin-top: 3px;
+  font-size: 16px;
+  margin-top: 6px;
+  font-weight: bold;
+  text-shadow: 1px 1px 0 #000;
 }
 
 .build-btn .icon {
-  font-size: 18px;
-  margin-bottom: 2px;
+  font-size: 42px;
+  margin-bottom: 8px;
+  display: block;
 }
 
 /* 铁匠铺升级面板 */
@@ -463,22 +468,27 @@ body.mobile-mode canvas {
   border: 0 !important;
 }
 
-/* 手机端建造菜单更紧凑 */
+/* 手机端建造菜单 —— 按键比电脑端更宽大、文字更清晰（手指点击） */
 body.mobile-mode #buildMenu {
-  bottom: 8px;
-  gap: 4px;
-  max-width: 100%;
-  padding: 5px 6px;
+  bottom: 10px;
+  gap: 10px;
+  padding: 10px 12px;
+  border-width: 4px;
+  max-width: 96%;
 }
-
+body.mobile-mode .build-popup-title {
+  font-size: 17px;
+  padding: 6px 8px 10px;
+}
 body.mobile-mode .build-btn {
-  min-width: 66px;
-  padding: 5px 4px;
-  font-size: 9px;
+  min-width: 160px;
+  min-height: 120px;
+  padding: 16px 22px;
+  font-size: 18px;
+  border-width: 4px;
 }
-
-body.mobile-mode .build-btn .icon { font-size: 14px; }
-body.mobile-mode .build-btn .cost { font-size: 8px; margin-top: 1px; }
+body.mobile-mode .build-btn .icon { font-size: 40px; margin-bottom: 6px; display:block; }
+body.mobile-mode .build-btn .cost { font-size: 15px; margin-top: 5px; font-weight: bold; }
 
 /* ==================== 虚拟摇杆与攻击键（手机端） ==================== */
 /* virtualPad 是相对于 viewport 的固定元素，画面旋转时它独立（手指按物理屏幕上的位置） */
