@@ -151,8 +151,37 @@ Game.prototype.setupInput = function() {
   const g = this;
 
   // ===== 键盘输入（电脑端玩家控制） =====
+
+  // 这些键在游戏进行中要独占：方向键和空格默认会滚动页面，
+  // 而空格/回车还会「按下」当前获得焦点的按钮 —— 比如刚点过暂停按钮，
+  // 之后每次按空格都会顺手把它再触发一遍。
+  const GAME_KEYS = new Set([
+    'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+    'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyJ',
+  ]);
+
+  // 松开所有按键。
+  // 必须在窗口失焦时调用：按住 A 的同时 Alt-Tab 切走，keyup 事件是收不到的，
+  // KeyA 会永久卡在 true。再配合移动逻辑里的方向抵消，卡住的键至多让人物
+  // 站住不动，而不会让反方向的键彻底失灵。
+  const releaseAllKeys = () => {
+    this.input.keys = {};
+    this.input.moveX = 0;
+    this.input.moveY = 0;
+    this.input.attackPressed = false;
+  };
+
   window.addEventListener('keydown', (e) => {
+    // 焦点在输入框里时（登录框、游戏心得）键盘归输入框，游戏不抢
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+
     this.input.keys[e.code] = true;
+
+    if (GAME_KEYS.has(e.code) && this.running && !this.paused && !this.gameOver) {
+      e.preventDefault();
+    }
+
     // ESC：暂停面板打开时→恢复；否则→关闭建造菜单
     if (e.code === 'Escape') {
       if (this.paused) this.togglePause(false);
@@ -163,8 +192,21 @@ Game.prototype.setupInput = function() {
       this.togglePause();
     }
   });
+
   window.addEventListener('keyup', (e) => {
     this.input.keys[e.code] = false;
+  });
+
+  // 切走窗口 / 切走标签页：一律松开所有键，避免按键卡死
+  window.addEventListener('blur', releaseAllKeys);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      releaseAllKeys();
+    } else {
+      // 标签页在后台时浏览器会暂停 requestAnimationFrame，
+      // 回到前台要重置计时，否则第一帧的 dt 是整段离开的时长
+      this.lastTime = performance.now();
+    }
   });
 
   // ===== 鼠标/触摸（画布：点击地下室格子→建造菜单，点击陆地上资源→不拦截） =====
@@ -240,10 +282,12 @@ Game.prototype.setupInput = function() {
   const quitBtn = document.getElementById('quitBtn');
   if (pauseBtn) pauseBtn.addEventListener('click', (e) => {
     e.preventDefault();
+    pauseBtn.blur();   // 不失焦的话，之后每次按空格都会把这个按钮再触发一遍
     if (this.running && !this.gameOver) this.togglePause(true);
   });
   if (resumeBtn) resumeBtn.addEventListener('click', (e) => {
     e.preventDefault();
+    resumeBtn.blur();
     this.togglePause(false);
   });
   if (saveSlotBtn) saveSlotBtn.addEventListener('click', (e) => {

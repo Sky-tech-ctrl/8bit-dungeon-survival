@@ -14,7 +14,7 @@
    assets/title_logo.png      8-bit 标题 LOGO
    assets/title_zombie.png    右侧探出的丧尸半身 + 手持石碑（PVZ 风）
    assets/title_notepad.png   左侧探出的记事本（点击开启「游戏心得」）
-   assets/title_spider.png    彩蛋：倒挂的蜘蛛侠
+   assets/title_spider.png    彩蛋：倒挂的蜘蛛侠（Q 版圆头）
 
  运行：python make_title_art.py
 ========================================================================
@@ -681,113 +681,206 @@ def make_notepad():
 # ======================================================================
 def make_spider():
     """
-    彩蛋：倒挂的蜘蛛侠。
+    彩蛋：倒挂的蜘蛛侠（Q 版圆头造型）。
 
-    做法是「先按正常站姿画，最后整体上下翻转」——
-    翻转后双臂自然朝下摊开、蛛丝从脚底伸向画面上方，倒挂的姿态就成立了。
-    关键是每个部件都要有深色描边，否则红配蓝在 8-bit 下会糊成一团。
+    直接按最终朝向（倒挂）作画，不再画完再翻转 —— 翻转法看着省事，
+    实际上每根手臂、每条腿的朝向都要在脑子里先倒过来一遍，极易画反。
+
+    Q 版比例：头占整体高度的 40% 左右，四肢短而圆。
+    经典姿势：一条腿绷直勾住蛛丝、另一条曲膝外展；一只手在头侧握拳，
+    另一只手朝外伸直、比出发射蛛丝的手势。倒挂时头在下方、双臂垂向画面下方。
+
+    画斜向肢体有个坑：如果沿途每一小段都各自描边，段与段的边会叠在肢体
+    内部，看着像一截梯子。所以斜向部件一律「先整条描边、再整条填充」两遍走。
     """
-    W, H, SCALE = 64, 112, 4
+    W, H, SCALE = 84, 116, 4
     img, d = canvas(W, H)
 
-    RED = (206, 42, 46)
-    RED_D = (148, 22, 28)
-    RED_L = (236, 82, 84)
-    BLUE = (44, 66, 158)
-    BLUE_D = (26, 40, 110)
-    BLUE_L = (74, 100, 200)
-    OL = (16, 12, 24)          # 统一描边色
-    WEB = (228, 232, 240)
+    RED = (226, 58, 62)
+    RED_D = (176, 34, 42)
+    RED_L = (250, 112, 112)
+    BLUE = (52, 82, 180)
+    BLUE_D = (32, 52, 128)
+    BLUE_L = (96, 128, 226)
+    OL = (26, 18, 34)
+    WEB = (240, 244, 252)
 
-    CX = W // 2
+    CX = 40
 
-    def orect(x, y, w, h, fill, ol=OL):
-        """带描边的实心块 —— 像素画里区分部件全靠它。"""
-        rect(d, x - 1, y - 1, w + 2, h + 2, ol)
+    def blob(x, y, w, h, fill):
+        """带描边的圆角块 —— Q 版造型的基本单元。"""
+        rect(d, x - 1, y - 1, w + 2, h + 2, OL)
         rect(d, x, y, w, h, fill)
+        for cx0, cy0 in [(x, y), (x + w - 1, y), (x, y + h - 1), (x + w - 1, y + h - 1)]:
+            px(d, cx0, cy0, OL)
 
-    # ---------- 双腿（翻转后朝上，连着蛛丝）----------
-    orect(CX - 12, 66, 10, 36, BLUE)
-    orect(CX + 2, 66, 10, 36, BLUE)
-    rect(d, CX - 12, 66, 3, 36, BLUE_L)        # 受光面
-    rect(d, CX + 2, 66, 3, 36, BLUE_L)
-    rect(d, CX - 4, 66, 2, 36, BLUE_D)
-    rect(d, CX + 10, 66, 2, 36, BLUE_D)
-    # 靴子（翻转后在最上方，紧挨蛛丝）
-    orect(CX - 13, 98, 12, 8, RED)
-    orect(CX + 1, 98, 12, 8, RED)
-    rect(d, CX - 13, 98, 12, 2, RED_L)
-    rect(d, CX + 1, 98, 12, 2, RED_L)
+    def limb(segs, fill, light=None):
+        """
+        斜向肢体：segs 是一串 (x, y, w, h)。
+        先把每一段向外扩 1px 描边画一遍，再整条填充 —— 两遍走才不会出现
+        段与段之间的内部描边（那就是「梯子」的由来）。
+        """
+        for (x, y, w, h) in segs:
+            rect(d, x - 1, y - 1, w + 2, h + 2, OL)
+        for (x, y, w, h) in segs:
+            rect(d, x, y, w, h, fill)
+        if light:
+            for (x, y, w, h) in segs:
+                rect(d, x, y, 2, h, light)
 
-    # ---------- 蛛丝：必须压在靴子之上，否则被描边吃掉只剩一小截 ----------
-    rect(d, CX - 2, 102, 4, H - 102, OL)
-    rect(d, CX - 1, 102, 2, H - 102, WEB)
-    for k in range(104, H, 5):                 # 丝上的结节
-        rect(d, CX - 3, k, 6, 2, WEB)
-        rect(d, CX - 3, k, 6, 1, (255, 255, 255))
+    def ocircle(cx, cy, r, fill):
+        circle(d, cx, cy, r + 1, OL)
+        circle(d, cx, cy, r, fill)
 
-    # ---------- 蓝色腰胯 ----------
-    orect(CX - 12, 54, 24, 14, BLUE)
-    rect(d, CX - 12, 54, 24, 2, BLUE_L)
-    rect(d, CX + 8, 54, 4, 14, BLUE_D)
+    # ==================================================================
+    # 蛛丝：从画面顶端垂下，勾在绷直那条腿的脚上
+    # ==================================================================
+    WEB_X = 34
+    rect(d, WEB_X - 2, 0, 4, 16, OL)
+    rect(d, WEB_X - 1, 0, 2, 16, WEB)
+    for k in range(2, 16, 5):
+        rect(d, WEB_X - 3, k, 6, 2, WEB)
 
-    # ---------- 躯干 ----------
-    orect(CX - 12, 28, 24, 28, RED)
-    rect(d, CX - 12, 28, 24, 2, RED_L)
-    rect(d, CX + 8, 28, 4, 28, RED_D)
-    # 胸口蛛网：横纵各几道
-    for k in range(31, 55, 4):
-        rect(d, CX - 11, k, 22, 1, RED_D)
-    for k in (-8, -4, 0, 4, 8):
-        rect(d, CX + k, 28, 1, 28, RED_D)
-    # 胸前蜘蛛标志
-    rect(d, CX - 2, 36, 4, 8, OL)
-    for k, ln in [(-6, 5), (-5, 4), (4, 4), (5, 5)]:
-        rect(d, CX + k, 37, 1, ln, OL)
-    rect(d, CX - 5, 36, 3, 1, OL)
-    rect(d, CX + 3, 36, 3, 1, OL)
+    # ==================================================================
+    # 双腿（倒挂 → 腿在上方）：左腿绷直勾丝，右腿曲膝外展，一静一动
+    # ==================================================================
+    blob(WEB_X - 4, 16, 9, 30, BLUE)                       # 左腿
+    rect(d, WEB_X - 4, 17, 3, 28, BLUE_L)
+    blob(WEB_X - 7, 10, 15, 9, RED)                        # 左靴
+    rect(d, WEB_X - 6, 11, 13, 2, RED_L)
 
-    # ---------- 双臂（翻转后朝下摊开 = 倒挂时垂下的手）----------
-    for side in (-1, 1):
-        ax = CX - 20 if side < 0 else CX + 12
-        orect(ax, 30, 8, 26, RED)
-        rect(d, ax, 30, 2, 26, RED_L if side < 0 else RED_D)
-        for k in range(33, 55, 4):             # 手臂上的蛛网
-            rect(d, ax, k, 8, 1, RED_D)
-        orect(ax - 1, 54, 10, 9, BLUE)         # 手套
-        rect(d, ax - 1, 54, 10, 2, BLUE_L)
-        for k in range(3):                     # 手指
-            rect(d, ax + k * 3, 62, 2, 3, BLUE)
-            rect(d, ax + k * 3, 62, 2, 3, BLUE)
-        rect(d, ax - 1, 62, 10, 1, OL)
+    limb([(50, 32, 9, 14)] +                               # 右腿：大腿 + 斜小腿
+         [(51 + k, 30 - k * 2, 9, 4) for k in range(8)],
+         BLUE, BLUE_L)
+    blob(56, 10, 15, 9, RED)                               # 右靴
+    rect(d, 57, 11, 13, 2, RED_L)
 
-    # ---------- 头（翻转后在最下方，正对观众）----------
-    HW, HH = 28, 24
-    hx0, hy0 = CX - HW // 2, 4
-    rect(d, hx0 - 1, hy0 - 1, HW + 2, HH + 2, OL)
-    for row in range(HH):                      # 圆角头套
-        inset = 0
-        if row < 2:
-            inset = 2 - row
-        elif row > HH - 3:
-            inset = row - (HH - 3)
-        rect(d, hx0 + inset, hy0 + row, HW - inset * 2, 1, RED)
-    rect(d, hx0 + 2, hy0, HW - 4, 2, RED_L)
-    rect(d, hx0 + HW - 5, hy0 + 2, 4, HH - 4, RED_D)
-    # 面罩蛛网
-    for k in range(-12, 13, 4):
-        rect(d, CX + k, hy0, 1, HH, RED_D)
-    for k in range(hy0 + 4, hy0 + HH, 5):
-        rect(d, hx0 + 1, k, HW - 2, 1, RED_D)
-    # 标志性的大白眼 —— 倒挂时最抢眼的部分，必须够大
-    for ex in (CX - 12, CX + 2):
-        rect(d, ex - 1, hy0 + 7, 12, 11, OL)
-        rect(d, ex, hy0 + 8, 10, 9, (245, 247, 252))
-        rect(d, ex + 1, hy0 + 9, 6, 5, (255, 255, 255))
-        rect(d, ex + 6, hy0 + 13, 4, 4, (196, 204, 220))
+    # ==================================================================
+    # 躯干
+    # ==================================================================
+    blob(29, 42, 22, 22, RED)
+    rect(d, 30, 43, 20, 2, RED_L)
+    rect(d, 46, 44, 4, 19, RED_D)
+    blob(30, 39, 20, 8, BLUE)                              # 蓝色腰胯
+    rect(d, 31, 40, 18, 2, BLUE_L)
+    for k in range(49, 63, 4):                             # 胸口蛛网
+        rect(d, 31, k, 18, 1, RED_D)
+    for k in (34, 40, 46):
+        rect(d, k, 48, 1, 15, RED_D)
+    rect(d, 38, 52, 4, 7, OL)                              # 蜘蛛标志
+    for k, ln in [(34, 5), (35, 4), (43, 4), (44, 5)]:
+        rect(d, k, 53, 1, ln, OL)
+    rect(d, 35, 52, 3, 1, OL)
+    rect(d, 42, 52, 3, 1, OL)
+
+    # ==================================================================
+    # 上臂：先画，肩关节随后被大头压住 —— Q 版没脖子，全靠头挡
+    # ==================================================================
+    blob(20, 52, 10, 20, RED)
+    rect(d, 21, 53, 3, 18, RED_L)
+    limb([(50 + k, 52 + k, 10, 6) for k in range(0, 10, 2)], RED, RED_L)
+
+    # ==================================================================
+    # 大脑袋（Q 版的灵魂）
+    # ==================================================================
+    HX, HY, HR = 40, 84, 21
+    ocircle(HX, HY, HR, RED)
+    # 高光/背光都收敛一点，避免在小图上糊成两块色斑
+    for yy in range(HY - HR, HY + HR + 1):
+        for xx in range(HX - HR, HX + HR + 1):
+            dd = (xx - HX) ** 2 + (yy - HY) ** 2
+            if dd > HR * HR:
+                continue
+            if (xx - (HX - 7)) ** 2 + (yy - (HY - 9)) ** 2 < 56:
+                px(d, xx, yy, RED_L)
+            elif dd > (HR - 4) ** 2 and xx > HX + 4 and yy > HY - 6:
+                px(d, xx, yy, RED_D)
+
+    # 面罩蛛网：经线只留 3 条、纬线 2 条，密了在小尺寸上会糊成一团
+    for k in (-11, 0, 11):
+        for yy in range(HY - HR, HY + HR + 1):
+            if (yy - HY) ** 2 + k * k <= (HR - 2) ** 2:
+                px(d, HX + k, yy, RED_D)
+    for ry in (HY - 11, HY + 9):
+        for xx in range(HX - HR, HX + HR + 1):
+            if (xx - HX) ** 2 + (ry - HY) ** 2 <= (HR - 2) ** 2:
+                px(d, xx, ry, RED_D)
+
+    # ---- 标志性的大白眼 ----
+    # 前两版分别画成了向下的尖三角（像獠牙）和两坨圆白饼，都不对。
+    # 蜘蛛侠面罩的招牌是「尖角杏眼」：外侧圆钝、内侧收成一个尖角。
+    # 这个形状用数学曲线拟合总是差口气，索性手写点阵掩膜逐像素定死。
+    #
+    # 下面这张是**右眼**、且已经按倒挂的朝向画好 —— 尖角在左上（内上方），
+    # 正着看时就是经典的向内下方收尖。左眼直接水平镜像。
+    EYE_MASK = [
+        "........111.....",
+        "......1111111...",
+        ".....111111111..",
+        "....11111111111.",
+        "...111111111111.",
+        "..1111111111111.",
+        ".11111111111111.",
+        "111111111111111.",
+        "1111111111111111",
+        "1111111111111111",
+        ".111111111111111",
+        "..11111111111111",
+        "...11111111111..",
+        ".....111111111..",
+        ".......11111....",
+    ]
+    EW, EH = len(EYE_MASK[0]), len(EYE_MASK)
+
+    for sgn in (-1, 1):
+        ex0 = HX + sgn * 9 - EW // 2
+        ey0 = HY - EH // 2
+        # 左眼是右眼的水平镜像
+        mask = EYE_MASK if sgn > 0 else [row[::-1] for row in EYE_MASK]
+        cells = {(c, r) for r in range(EH) for c in range(EW) if mask[r][c] == '1'}
+
+        # 先描边：凡是空格但四邻有实心的位置，全部填成描边色。
+        # 整体膨胀一圈再填内部，边才会严丝合缝地贴着这个不规则轮廓。
+        for r in range(-1, EH + 1):
+            for c in range(-1, EW + 1):
+                if (c, r) in cells:
+                    continue
+                if any((c + dc, r + dr) in cells for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                    px(d, ex0 + c, ey0 + r, OL)
+        # 再填白
+        for (c, r) in cells:
+            px(d, ex0 + c, ey0 + r, (255, 255, 255))
+        # 反光：靠外侧下缘压一层冷灰，眼睛才有厚度而不是一块死白
+        for (c, r) in cells:
+            if r >= EH - 5 and (c > EW * 0.45 if sgn > 0 else c < EW * 0.55):
+                px(d, ex0 + c, ey0 + r, (198, 208, 230))
+
+    # ==================================================================
+    # 前臂 + 双手：画在头之后 → 手垂在脸的两侧
+    # ==================================================================
+    # 左手：握拳收在头侧
+    blob(14, 70, 10, 18, RED)
+    rect(d, 15, 71, 3, 16, RED_L)
+    ocircle(18, 93, 7, BLUE)
+    circle(d, 15, 90, 3, BLUE_L)
+    for k in range(3):
+        rect(d, 14 + k * 3, 96, 2, 2, BLUE_D)
+
+    # 右手：伸直外展，比出发射蛛丝的手势
+    limb([(60 + k, 62 + k * 2, 9, 5) for k in range(9)], RED, RED_L)
+    blob(68, 82, 12, 12, BLUE)                       # 手掌
+    rect(d, 69, 83, 3, 10, BLUE_L)
+    # 食指与小指伸出、中间两指收拢 —— 就是那个发射手势
+    for fx in (69, 76):
+        blob(fx, 93, 4, 8, BLUE)
+        rect(d, fx, 94, 1, 6, BLUE_L)
+    rect(d, 73, 93, 3, 4, BLUE_D)                    # 收拢的中指 / 无名指
+    blob(65, 85, 4, 6, BLUE)                         # 拇指
+    # 手心射出的一小簇蛛丝，点明这是「发射」而不是随便张开手
+    for k in range(4):
+        rect(d, 73 - k, 104 + k * 3, 2, 2, WEB)
 
     out = upscale(img, SCALE)
-    out = out.transpose(Image.FLIP_TOP_BOTTOM)     # ← 倒挂
     out.save(os.path.join(OUT, 'title_spider.png'))
     print('  title_spider.png   ', out.size)
 

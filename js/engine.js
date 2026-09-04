@@ -1002,11 +1002,20 @@ class Game {
     let ix = this.input.moveX;
     let iy = this.input.moveY;
 
-    // 键盘输入叠加
-    if (this.input.keys['ArrowLeft'] || this.input.keys['KeyA']) ix = (ix !== 0) ? ix : -1;
-    if (this.input.keys['ArrowRight'] || this.input.keys['KeyD']) ix = (ix !== 0) ? ix : 1;
-    if (this.input.keys['ArrowUp'] || this.input.keys['KeyW']) iy = (iy !== 0) ? iy : -1;
-    if (this.input.keys['ArrowDown'] || this.input.keys['KeyS']) iy = (iy !== 0) ? iy : 1;
+    // 键盘输入叠加（摇杆已有输入时以摇杆为准）
+    // 用「相加」而不是原来的 ix = (ix !== 0) ? ix : -1：
+    // 那种写法是「先判定的赢」，左永远压过右。一旦某个方向键卡在按下状态
+    // （按住 A 的同时 Alt-Tab 走人，keyup 就永远收不到），右方向键会就此
+    // 彻底失灵 —— 表现出来正是「部分按键失效」。相加则让相反方向自然抵消。
+    const K = this.input.keys;
+    if (ix === 0) {
+      if (K['ArrowLeft'] || K['KeyA']) ix -= 1;
+      if (K['ArrowRight'] || K['KeyD']) ix += 1;
+    }
+    if (iy === 0) {
+      if (K['ArrowUp'] || K['KeyW']) iy -= 1;
+      if (K['ArrowDown'] || K['KeyS']) iy += 1;
+    }
 
     // 归一化
     const mag = Math.sqrt(ix*ix + iy*iy);

@@ -227,7 +227,7 @@
   width: clamp(96px, 12vw, 180px);
   z-index: 100000;
   pointer-events: none;
-  transform: translateY(-120%);
+  transform: translateY(-130%);
   display: none;
 }
 #tsSpider.show {
@@ -250,8 +250,10 @@
 }
 
 @keyframes tsSpiderDrop {
-  from { transform: translateY(-120%); }
-  to   { transform: translateY(6%); }
+  from { transform: translateY(-130%); }
+  /* --drop-to 由 title.js 按 #gameContainer 的实测位置写入；
+     取不到时退回一个保守的默认值 */
+  to   { transform: translateY(var(--drop-to, 6%)); }
 }
 @keyframes tsSpiderSway {
   0%, 100% { rotate: -3deg; }

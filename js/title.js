@@ -171,6 +171,16 @@ const TitleScreen = (() => {
     if (!sp || sp.classList.contains('show')) return;   // 正在挂着就不重复触发
 
     if (fl) { fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go'); }
+
+    // 落点按画面实际位置算。蜘蛛侠是 position:fixed 挂在 body 上的
+    //（这样才能压过所有面板），但如果只让它停在视口顶端，
+    // 它就吊在游戏画面上方的黑边里，和美术完全脱节。
+    // 这里让它垂到画面内约 12% 的高度，正好落在标题的夜空区域。
+    const gc = document.getElementById('gameContainer');
+    if (gc) {
+      const r = gc.getBoundingClientRect();
+      sp.style.setProperty('--drop-to', Math.max(0, Math.round(r.top + r.height * 0.12)) + 'px');
+    }
     sp.classList.add('show');
 
     clearTimeout(spiderTimer);
