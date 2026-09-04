@@ -6,3 +6,9 @@ Thumbs.db
 node_modules/
 __pycache__/
 *.pyc
+
+# 精灵图的放大预览：只给人眼检查用，不是游戏资源
+preview/
+# 后端的账号/存档数据库：运行时生成，绝不入库
+server/db.json
+server/db.json.tmp

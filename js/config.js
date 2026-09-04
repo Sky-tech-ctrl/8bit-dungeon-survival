@@ -21,6 +21,19 @@ const PLAYER = {
   spawnY: GROUND_Y - 22
 };
 
+// ===== 角色精灵图规格 =====
+// 由 make_char_sprites.py 生成并打印；换图后把脚本输出的数字同步到这里。
+// anchorX 是「角色主体中心」在帧内的 x 坐标 —— 丧尸双臂前伸，帧必然右宽左窄，
+// 按帧中心对齐会让它整体左飘，所以必须按锚点对齐。
+const SPRITE_SPEC = {
+  player: { frames: 4, fw: 40, fh: 37, anchorX: 15 },
+  zombie: { frames: 4, fw: 44, fh: 43, anchorX: 15 },
+};
+// 帧序：0=idle 1=walkA 2=walkB 3=attack
+// 走路走四拍 A→idle→B→idle：比 A→B 两拍多一个双脚并拢的过渡，
+// 否则角色看着像螃蟹在横move。
+const WALK_CYCLE = [1, 0, 2, 0];
+
 // ===== 野生资源堆 =====
 const RESOURCE_PILE = {
   spawnInterval: 8,    // 每8秒尝试生成

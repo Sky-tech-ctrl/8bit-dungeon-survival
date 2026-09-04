@@ -1,0 +1,337 @@
+/* ============================================================================
+   标题界面
+   ============================================================================
+   布局全部用百分比，锚在 #gameContainer（960×720）上 ——
+   手机端整个容器会被 rotate(90deg)，只有百分比布局才能跟着一起转而不散架。
+
+   三块内容的层次：
+     背景图  → 最底，压暗给前景让路
+     LOGO    → 左上
+     丧尸+石碑 → 右侧，石碑上的刻字区由 HTML 按钮精确覆盖
+     记事本  → 左侧探出一半，点开写「游戏心得」
+   ========================================================================== */
+
+#titleScreen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 500;
+  font-family: 'Courier New', monospace;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#titleScreen.hidden { display: none; }
+
+/* 所有标题美术都是像素图，一律禁用平滑 */
+#titleScreen img {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- 背景 */
+#tsBg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---------------------------------------------------------------- LOGO */
+#tsLogo {
+  position: absolute;
+  left: 3%;
+  top: 3%;
+  width: 44%;
+  max-width: 44%;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, .55));
+  animation: tsLogoFloat 3.4s ease-in-out infinite;
+}
+@keyframes tsLogoFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+/* 副标题：一行滚动提示，压在 LOGO 下方 */
+#tsTagline {
+  position: absolute;
+  left: 4%;
+  top: 30%;
+  width: 42%;
+  color: #cfe6ff;
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 #000;
+  opacity: .85;
+  line-height: 1.7;
+}
+#tsTagline b { color: #ffd700; }
+
+/* ------------------------------------------------- 丧尸 + 石碑（右侧） */
+#tsZombie {
+  position: absolute;
+  right: -3%;
+  bottom: 0;
+  height: 93%;
+  aspect-ratio: 640 / 736;      /* 与 title_zombie.png 完全一致，百分比定位才对得准 */
+  animation: tsZombieIn .55s cubic-bezier(.2, 1.4, .5, 1) both;
+}
+#tsZombie > img { width: 100%; height: 100%; }
+
+@keyframes tsZombieIn {
+  from { transform: translateX(28%) rotate(4deg); opacity: 0; }
+  to   { transform: translateX(0) rotate(0); opacity: 1; }
+}
+
+/* 丧尸小幅晃动 —— PVZ 那种「僵而不死」的感觉 */
+#tsZombie.idle { animation: tsZombieSway 4.2s ease-in-out infinite; }
+@keyframes tsZombieSway {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-5px) rotate(-.6deg); }
+}
+
+/* 石碑刻字区：这四个数字来自 make_title_art.py 的输出，改图必须同步 */
+#tsOptions {
+  position: absolute;
+  left: 8.75%;
+  top: 40.22%;
+  width: 51.25%;
+  height: 47.83%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  align-items: stretch;
+  padding: 2% 4%;
+  box-sizing: border-box;
+  gap: 2%;
+}
+
+/* 选项按钮：做成「刻在石头上」而不是「贴在石头上」——
+   靠上暗下亮的双重描边制造凹陷感，hover 时才点亮成金色 */
+.ts-opt {
+  flex: 1 1 0;
+  min-height: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #43434e;
+  font-family: inherit;
+  font-size: 23px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  cursor: pointer;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, .45), 0 1px 0 rgba(255, 255, 255, .5);
+  transition: color .12s, text-shadow .12s, transform .12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4em;
+  position: relative;
+}
+.ts-opt .ico { font-size: 1.15em; }
+
+.ts-opt:hover,
+.ts-opt:focus-visible {
+  color: #ffd24a;
+  text-shadow: 0 0 10px rgba(255, 190, 40, .85), 2px 2px 0 #000;
+  transform: scale(1.05);
+  outline: none;
+}
+.ts-opt:active { transform: scale(.98); }
+
+/* hover 时两侧浮出的尖括号，替代传统的高亮底色 —— 不破坏石面质感 */
+.ts-opt::before,
+.ts-opt::after {
+  content: '';
+  opacity: 0;
+  color: #ffd24a;
+  transition: opacity .12s, transform .12s;
+  font-size: .9em;
+}
+.ts-opt::before { content: '▸'; transform: translateX(6px); }
+.ts-opt::after  { content: '◂'; transform: translateX(-6px); }
+.ts-opt:hover::before,
+.ts-opt:hover::after,
+.ts-opt:focus-visible::before,
+.ts-opt:focus-visible::after { opacity: 1; transform: translateX(0); }
+
+/* 分隔的刻痕 */
+.ts-opt + .ts-opt { border-top: 2px solid rgba(60, 60, 70, .35); }
+
+/* ------------------------------------------------ 记事本（左侧探出） */
+#tsNotepad {
+  position: absolute;
+  left: -7%;
+  top: 40%;
+  width: 27%;
+  cursor: pointer;
+  transition: transform .18s ease-out, filter .18s;
+  transform-origin: left center;
+  animation: tsPadIn .5s .2s ease-out both;
+}
+#tsNotepad > img { width: 100%; }
+#tsNotepad:hover { transform: translateX(6%) rotate(2deg); filter: drop-shadow(0 0 14px rgba(255, 210, 74, .55)); }
+#tsNotepad:active { transform: translateX(4%) scale(.98); }
+
+@keyframes tsPadIn {
+  from { transform: translateX(-40%); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+/* 记事本旁的提示气泡 */
+#tsNotepadHint {
+  position: absolute;
+  left: 20%;
+  top: 47%;
+  color: #ffd700;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 #000;
+  pointer-events: none;
+  animation: tsHintBlink 2.2s ease-in-out infinite;
+}
+@keyframes tsHintBlink {
+  0%, 100% { opacity: .35; transform: translateX(0); }
+  50%      { opacity: 1; transform: translateX(4px); }
+}
+
+/* ---------------------------------------------------- 左下角状态栏 */
+#tsStatus {
+  position: absolute;
+  left: 3%;
+  bottom: 3%;
+  color: #9fb4c8;
+  font-size: 12px;
+  line-height: 1.9;
+  text-shadow: 1px 1px 0 #000;
+  z-index: 3;
+}
+#tsStatus .who { color: #ffd700; font-weight: bold; }
+#tsStatus .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+#tsStatus .dot.on { background: #5f5; box-shadow: 0 0 8px #5f5; }
+#tsStatus .dot.off { background: #888; }
+#tsStatus a {
+  color: #8ff; cursor: pointer; text-decoration: underline;
+  text-underline-offset: 2px;
+}
+#tsStatus a:hover { color: #ffd700; }
+
+/* ------------------------------------------------------ 彩蛋：蜘蛛侠 */
+#tsSpider {
+  position: fixed;              /* body 直属，压在所有面板之上 */
+  left: 50%;
+  margin-left: -6vw;
+  top: 0;
+  width: clamp(96px, 12vw, 180px);
+  z-index: 100000;
+  pointer-events: none;
+  transform: translateY(-120%);
+  display: none;
+}
+#tsSpider.show {
+  display: block;
+  /* 落下 → 回弹 → 悬停晃动，最后由 JS 移除 class 收回 */
+  animation: tsSpiderDrop 1s cubic-bezier(.3, 1.6, .5, 1) both,
+             tsSpiderSway 2.6s 1s ease-in-out infinite;
+}
+#tsSpider > img { width: 100%; filter: drop-shadow(0 8px 12px rgba(0, 0, 0, .5)); }
+
+/* 蛛丝：从画面顶端一直连到蜘蛛侠脚上 */
+#tsSpider .web {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 2px;
+  height: 100vh;
+  margin-left: -1px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, .25), rgba(255, 255, 255, .9));
+}
+
+@keyframes tsSpiderDrop {
+  from { transform: translateY(-120%); }
+  to   { transform: translateY(6%); }
+}
+@keyframes tsSpiderSway {
+  0%, 100% { rotate: -3deg; }
+  50%      { rotate: 3deg; }
+}
+
+/* 彩蛋触发时的一闪 */
+#tsFlash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 99999;
+}
+#tsFlash.go { animation: tsFlash .45s ease-out; }
+@keyframes tsFlash {
+  0% { opacity: .75; }
+  100% { opacity: 0; }
+}
+
+/* ==========================================================================
+   「游戏心得」与「新手教程」面板
+   两者复用 index.html 里已有的 .modal-mask / .modal-card 样式，
+   这里只补它们各自特有的部分。
+   ========================================================================== */
+
+#notesCard, #tutorialCard { min-width: 460px; max-width: 560px; }
+
+#notesArea {
+  width: 100%;
+  min-height: 210px;
+  resize: vertical;
+  background: #f4eed6;                 /* 保持记事本的纸张感 */
+  color: #3a332e;
+  border: 3px solid #b03a34;
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 26px;                   /* 配合下面的横线背景，字正好落在线上 */
+  background-image: repeating-linear-gradient(
+    transparent, transparent 25px, #aebfd6 25px, #aebfd6 26px);
+  outline: none;
+  box-sizing: border-box;
+}
+#notesArea:focus { border-color: #ffd700; }
+#notesMeta { display: flex; justify-content: space-between; color: #888; font-size: 12px; margin-top: 8px; }
+#notesMeta .saved { color: #5f5; }
+
+/* 教程条目 */
+.tut-list { max-height: 46vh; overflow-y: auto; padding-right: 6px; }
+.tut-item {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 10px 12px; margin-bottom: 8px;
+  background: #111118; border: 1px solid #2a2a3a; border-radius: 8px;
+}
+.tut-item .k {
+  flex: 0 0 auto; min-width: 78px; text-align: center;
+  background: #23233a; border: 1px solid #3a3a55; border-radius: 5px;
+  color: #ffd700; font-size: 12px; font-weight: bold; padding: 4px 6px;
+}
+.tut-item .v { flex: 1; color: #ccd; font-size: 13px; line-height: 1.65; }
+.tut-item .v b { color: #fff; }
+
+/* ==========================================================================
+   手机端：容器整体旋转 90°，百分比布局会自动跟随，
+   这里只需要把绝对字号换成相对视口的尺寸。
+   ========================================================================== */
+body.mobile-mode #tsTagline { font-size: 1.6vh; }
+body.mobile-mode #tsStatus { font-size: 1.5vh; }
+body.mobile-mode #tsNotepadHint { font-size: 1.5vh; }
+body.mobile-mode #notesCard,
+body.mobile-mode #tutorialCard { min-width: 78vw; max-width: 88vw; }
+
+/* 窄屏兜底：LOGO 和记事本容易和石碑打架，缩一点并让开 */
+@media (max-width: 700px) {
+  #tsLogo { width: 52%; }
+  #tsTagline { display: none; }
+  #tsNotepad { width: 32%; top: 46%; }
+  #tsNotepadHint { display: none; }
+  #notesCard, #tutorialCard { min-width: 0; width: 92vw; }
+}

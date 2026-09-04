@@ -640,37 +640,29 @@ Game.prototype.drawPlayer = function(ctx, p) {
   // 精灵图（若已加载）—— 3 帧横向排列：idle(0) walk(1) attack(2)
   const spr = this.assets.get('player_sprite');
   if (spr) {
-    const frames = 3;
-    const fw = spr.naturalWidth / frames;
-    // 每帧的实际内容边界框（代码生成的 8-bit 玩家，确保头发/腰带/腕带完整）
-    // frame: [srcX(相对帧起点), srcY, srcW, srcH]
-    const FRAME_BBOX = [
-      [108, 40, 47, 113],  // frame0 idle (ratio 0.613)
-      [364, 40, 47, 113],  // frame1 walk (ratio 0.633)
-      [603, 40, 61, 100],  // frame2 attack (剑伸出宽 ratio 0.685)
-    ];
-    // 选帧：攻击动画时 → frame 2；走动中 → frame 1；否则 frame 0
+    const S = SPRITE_SPEC.player;
+    // 选帧：攻击 > 走路 > 待机
     let fi = 0;
-    if (p.attackAnim > 0.3) fi = 2;
-    else if (Math.abs(this.input.moveX) + Math.abs(this.input.moveY) > 0.1 ||
-             (this.input.keys['ArrowLeft']||this.input.keys['ArrowRight']||
-              this.input.keys['KeyA']||this.input.keys['KeyD']||
-              this.input.keys['KeyW']||this.input.keys['KeyS']||
-              this.input.keys['ArrowUp']||this.input.keys['ArrowDown'])) fi = 1;
-    const bb = FRAME_BBOX[fi];
-    // 目标尺寸：用户要求缩小玩家体型（马里奥比例）绘制高度 36px
+    const moving = Math.abs(this.input.moveX) + Math.abs(this.input.moveY) > 0.1 ||
+                   this.input.keys['ArrowLeft'] || this.input.keys['ArrowRight'] ||
+                   this.input.keys['KeyA'] || this.input.keys['KeyD'] ||
+                   this.input.keys['KeyW'] || this.input.keys['KeyS'] ||
+                   this.input.keys['ArrowUp'] || this.input.keys['ArrowDown'];
+    if (p.attackAnim > 0.3) fi = 3;
+    else if (moving) fi = WALK_CYCLE[Math.floor(Date.now() / 120) % WALK_CYCLE.length];
+
+    // 贴图 1:1 绘制（生成时就是按游戏内尺寸画的，缩放只会糊边）
     const groundContactY = p.inBasement ? Math.min(H - 6, p.y + 10) : GROUND_Y - 3;
-    const targetH = 36;
-    const targetW = Math.round(targetH * (bb[2] / bb[3]));
-    const drawTopY = groundContactY - targetH + 2;
+    const drawTopY = groundContactY - S.fh + 1;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     if (p.facing < 0) {
-      ctx.translate(x, drawTopY);
+      // 以角色所在的 x 为轴镜像，锚点仍落在 x 上
+      ctx.translate(x, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(spr, fi*fw + bb[0], bb[1], bb[2], bb[3], -targetW/2, 0, targetW, targetH);
+      ctx.drawImage(spr, fi * S.fw, 0, S.fw, S.fh, -S.anchorX, drawTopY, S.fw, S.fh);
     } else {
-      ctx.drawImage(spr, fi*fw + bb[0], bb[1], bb[2], bb[3], x - targetW/2, drawTopY, targetW, targetH);
+      ctx.drawImage(spr, fi * S.fw, 0, S.fw, S.fh, x - S.anchorX, drawTopY, S.fw, S.fh);
     }
     ctx.restore();
   }
@@ -931,30 +923,30 @@ Game.prototype.drawZombie = function(ctx, z) {
   ctx.translate(x, y);
   ctx.scale(scale, scale);
 
-  // 精灵图（3 帧 idle/walk/attack）
   const zspr = this.assets.get('zombie_sprite');
-  // 校验 sprite 有效性：3帧单张宽度应该 < 500px（fw ≈ naturalWidth/3）。
-  // 如果当前 zombie_sprite.png 是明显错误的大尺寸（1680×2240 那种）或尺寸异常，
-  // 就跳过 sprite 路径，直接用下方代码绘制 fallback（也就是"原来那版"手绘丧尸，正常显示正常颜色）。
-  const zombieFw = zspr ? (zspr.naturalWidth / 3) : 0;
-  const zombieFh = zspr ? zspr.naturalHeight : 0;
-  const spriteValid = !!(zspr && zombieFw >= 10 && zombieFw <= 200 && zombieFh >= 10 && zombieFh <= 200);
+  // 尺寸自检：贴图必须和 SPRITE_SPEC 对得上，对不上就退回代码手绘版本，
+  // 免得换图换到一半时画面直接崩掉。
+  const ZS = SPRITE_SPEC.zombie;
+  const spriteValid = !!(zspr &&
+    zspr.naturalWidth === ZS.fw * ZS.frames &&
+    zspr.naturalHeight === ZS.fh);
   if (spriteValid) {
-    const frames = 3;
-    const fw = zombieFw;
-    const fh = zombieFh;
+    // 选帧：攻击 > 走路 > 待机。walkAnim 只在丧尸真的在移动时累加，
+    // 所以拿它当相位，停下来时自然停在 idle。
     let fi = 0;
-    if (z.attackAnim > 0.4) fi = 2;
-    else if (Math.abs(z.walkAnim) > 0.3) fi = 1;
-    const tw = 32, th = 66;
+    if (z.attackAnim > 0.4) fi = 3;
+    else if (z.walkAnim > 0.3) fi = WALK_CYCLE[Math.floor(z.walkAnim * 1.2) % WALK_CYCLE.length];
+
+    // 落地点：z.y 是 GROUND_Y-22，而影子画在 GROUND_Y-3，
+    // 两者相差 20px —— 旧代码写死 +10，丧尸其实一直悬在影子上方 10px。
+    // 除以 scale 是因为外层已经 ctx.scale 过了，坦克丧尸才不会踩进地里。
+    const footY = 20 / scale;
+    const topY = footY - ZS.fh;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    // 丧尸朝 DOOR_X 走（面朝中央）
-    const faceRight = DOOR_X > z.x;
-    if (!faceRight) {
-      ctx.scale(-1, 1);
-    }
-    ctx.drawImage(zspr, fi*fw, 0, fw, fh, -tw/2, -th+10, tw, th);
+    // 丧尸永远面朝中央大门
+    if (DOOR_X <= z.x) ctx.scale(-1, 1);
+    ctx.drawImage(zspr, fi * ZS.fw, 0, ZS.fw, ZS.fh, -ZS.anchorX, topY, ZS.fw, ZS.fh);
     ctx.restore();
   } else {
     // —— 代码绘制（"原来那版"：绿正常 / 深绿快 / 灰紫坦克，颜色正确，尺寸可调）

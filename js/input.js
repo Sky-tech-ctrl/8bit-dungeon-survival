@@ -253,29 +253,15 @@ Game.prototype.setupInput = function() {
   });
   if (quitBtn) quitBtn.addEventListener('click', (e) => {
     e.preventDefault();
-    const c = confirm('退出后将回到存档选择界面。确定退出吗？');
+    const c = confirm('退出后将回到标题界面。未保存的进度会丢失，确定退出吗？');
     if (!c) return;
     this.running = false;
-    const saveModal = document.getElementById('saveModal');
-    if (saveModal) saveModal.classList.remove('hidden');
-    // 重新渲染存档列表
-    if (UserSystem.isLoggedIn()) {
-      const grid = document.getElementById('saveGrid');
-      const uName = document.getElementById('saveUsername');
-      if (uName) uName.textContent = UserSystem.current();
-      if (grid) {
-        const slots = UserSystem.listSaves();
-        grid.innerHTML = '';
-        slots.forEach(s => {
-          const div = document.createElement('div');
-          div.className = 'save-slot ' + (s.filled ? 'filled' : 'empty');
-          div.innerHTML = `<div class="slot-num">${s.slot}</div>
-            ${s.filled ? `<div class="slot-name">${s.name}</div><div class="slot-info">第${s.wave}波</div>` : `<div class="slot-name">— 空 —</div>`}`;
-          div.onclick = () => { alert('请刷新页面进入存档管理'); };
-          grid.appendChild(div);
-        });
-      }
-    }
+    // 直接回标题界面。旧版是在这里重新画一遍存档格子，但那份拷贝里
+    // 点存档只会弹「请刷新页面进入存档管理」—— 等于是个死胡同。
+    // 标题界面本来就是所有入口的集散地，回这里最省事也最不会错。
+    document.getElementById('pausePanel').classList.add('hidden');
+    if (this._backToTitle) this._backToTitle();
+    else if (window.TitleScreen) TitleScreen.show();
   });
 
   // ===== 虚拟摇杆 & 攻击键（仅手机端显示） =====

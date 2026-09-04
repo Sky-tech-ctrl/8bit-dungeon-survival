@@ -106,8 +106,18 @@ class Game {
     }
 
     let isRegister = false;
+    let pendingIntent = 'new';    // 登录成功后要去干嘛：'new' 开新档 / 'load' 读档
 
-    function showAuth() {
+    // 从登录框或存档框退回标题界面
+    function backToTitle() {
+      authModal.classList.add('hidden');
+      saveModal.classList.add('hidden');
+      if (window.TitleScreen) TitleScreen.show();
+    }
+    game._backToTitle = backToTitle;
+
+    function showAuth(intent) {
+      if (intent) pendingIntent = intent;
       saveModal.classList.add('hidden');
       authModal.classList.remove('hidden');
       authUser.value = ''; authPwd.value = ''; authError.textContent = '';
@@ -116,16 +126,24 @@ class Game {
       authSwitch.textContent = isRegister ? '去登录 →' : '立即注册 →';
     }
 
-    function showSave() {
+    function showSave(intent) {
+      if (intent) pendingIntent = intent;
       authModal.classList.add('hidden');
       saveModal.classList.remove('hidden');
+      // 「开始新游戏」和「读取存档」共用这个界面，只有提示语不同
+      const hint = document.getElementById('saveModeText');
+      if (hint) {
+        hint.innerHTML = pendingIntent === 'load'
+          ? '点击一个<b style="color:#ffd700">已有存档</b>继续游戏'
+          : '点击一个<b style="color:#ffd700">空槽位</b>开始新游戏';
+      }
       bindDeviceSelect();
       renderSaveGrid();
     }
 
-    function renderSaveGrid() {
-      saveUserBar.textContent = UserSystem.current();
-      const slots = UserSystem.listSaves();
+    async function renderSaveGrid() {
+      saveUserBar.textContent = (await AuthAPI.current()) || '';
+      const slots = await AuthAPI.listSaves();
       saveGrid.innerHTML = '';
       slots.forEach(s => {
         const div = document.createElement('div');
@@ -139,14 +157,14 @@ class Game {
       });
     }
 
-    function handleSlotClick(s) {
+    async function handleSlotClick(s) {
       const mode = requireDevice();
       if (!mode) return;
       if (s.filled) {
         // 读取
         const confirmLoad = confirm(`确定读取存档 ${s.slot}【${s.name}】吗？\n当前未保存的进度将丢失。`);
         if (!confirmLoad) return;
-        const save = UserSystem.load(s.slot);
+        const save = await AuthAPI.load(s.slot);
         if (save) {
           const result = game.importSnapshot(save.data);
           if (result.ok) {
@@ -174,29 +192,36 @@ class Game {
       // 自动保存
       setTimeout(() => {
         const snap = game.exportSnapshot();
-        UserSystem.save(targetSlot, snap, `存档 ${targetSlot}`);
+        AuthAPI.save(targetSlot, snap, `存档 ${targetSlot}`);
       }, 600);
     }
 
     // 提交（登录或注册）
-    authSubmit.onclick = () => {
+    authSubmit.onclick = async () => {
       authError.textContent = '';
       const u = authUser.value.trim();
       const p = authPwd.value;
-      const r = isRegister ? UserSystem.register(u, p) : UserSystem.login(u, p);
-      if (r.ok) {
-        showSave();
-      } else {
-        authError.textContent = r.msg;
+      const label = authSubmit.textContent;
+      authSubmit.disabled = true;
+      authSubmit.textContent = '请稍候…';
+      try {
+        const r = isRegister ? await AuthAPI.register(u, p) : await AuthAPI.login(u, p);
+        if (r.ok) showSave(pendingIntent);
+        else authError.textContent = r.msg;
+      } catch (e) {
+        authError.textContent = '连接失败：' + (e && e.message ? e.message : e);
+      } finally {
+        authSubmit.disabled = false;
+        authSubmit.textContent = label;
       }
     };
     authSwitch.onclick = () => { isRegister = !isRegister; showAuth(); };
     authPwd.addEventListener('keydown', e => { if (e.key === 'Enter') authSubmit.click(); });
 
-    newGameBtn.onclick = () => {
+    newGameBtn.onclick = async () => {
       const mode = requireDevice();
       if (!mode) return;
-      const slots = UserSystem.listSaves() || [];
+      const slots = (await AuthAPI.listSaves()) || [];
       const emptySlot = slots.find(s => !s.filled);
       if (!emptySlot) {
         // 10个都满了，让用户选择要覆盖的槽
@@ -208,17 +233,25 @@ class Game {
       }
     };
 
-    saveLogout.onclick = () => {
-      UserSystem.logout();
-      showAuth();
+    saveLogout.onclick = async () => {
+      await AuthAPI.logout();
+      backToTitle();
     };
 
-    // 已自动登录过？直接跳过 authModal
-    if (UserSystem.isLoggedIn()) {
-      showSave();
-    } else {
-      showAuth();
+    // 给两个模态框补上「返回标题」入口 —— 玩家在任何一步都该能退回去
+    for (const modalId of ['authModal', 'saveModal']) {
+      const card = document.querySelector('#' + modalId + ' .modal-card');
+      if (!card || card.querySelector('.back-to-title')) continue;
+      const back = document.createElement('button');
+      back.className = 'modal-btn modal-btn-secondary back-to-title';
+      back.textContent = '← 返回标题界面';
+      back.onclick = backToTitle;
+      card.appendChild(back);
     }
+
+    // 入口交给标题界面：这里只把两个流程暴露出去，构造时不主动弹任何窗
+    game._showAuth = showAuth;
+    game._showSave = showSave;
   }
 
   // 用户完成登录 + 存档选择 + 设备选择后，启动游戏
@@ -1392,14 +1425,14 @@ class Game {
   }
 
   // 游戏中保存到指定槽位（暂停面板调用）
-  saveToSlot(slot) {
-    if (slot < 1 || slot > UserSystem.MAX_SAVES) { alert('槽位必须在 1-' + UserSystem.MAX_SAVES); return; }
-    const slots = UserSystem.listSaves();
+  async saveToSlot(slot) {
+    if (slot < 1 || slot > AuthAPI.MAX_SAVES) { alert('槽位必须在 1-' + AuthAPI.MAX_SAVES); return; }
+    const slots = await AuthAPI.listSaves();
     const existing = slots[slot - 1];
     const defaultName = existing && existing.filled ? existing.name : `手动存档 ${slot}`;
     const name = prompt('存档名称：', defaultName);
     if (name === null) return;
-    const r = UserSystem.save(slot, this.exportSnapshot(), name);
+    const r = await AuthAPI.save(slot, this.exportSnapshot(), name);
     if (r.ok) {
       alert('✓ ' + r.msg);
       this._autoSaveSlot = slot;

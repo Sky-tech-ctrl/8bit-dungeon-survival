@@ -10,6 +10,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='56'%3E🎮%3C/text%3E%3C/svg%3E" type="image/svg+xml">
 <title>8-BIT 地牢求生</title>
 <link rel="stylesheet" href="css/style.css?v=40">
+<link rel="stylesheet" href="css/title.css?v=1">
 <style>
 /* ======== 登录/注册 & 存档 模态框 ======== */
 .modal-mask {position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;display:flex;align-items:center;justify-content:center}
@@ -63,7 +64,7 @@
 <body>
 
 <!-- ========== 登录/注册 模态框 ========== -->
-<div id="authModal" class="modal-mask">
+<div id="authModal" class="modal-mask hidden">
   <div class="modal-card">
     <div class="modal-title">☠ 8-BIT 地牢求生 ☠</div>
     <div class="modal-sub">请先登录或注册账号（每账号 10 个存档槽）</div>
@@ -114,6 +115,41 @@
   </div>
 </div>
 
+
+<!-- ========== 游戏心得 ========== -->
+<div id="notesModal" class="modal-mask hidden">
+  <div class="modal-card" id="notesCard">
+    <div class="modal-title">📝 游戏心得</div>
+    <div class="modal-sub">随手记下你的打法、配装和踩过的坑 —— 停止输入后自动保存</div>
+    <textarea id="notesArea" placeholder="比如：&#10;· 第 5 波前一定要把兵营造出来&#10;· 铁匠铺优先升到 Lv.3，砍快速丧尸能一刀两段&#10;· 电力别囤太多，仓库满了就是浪费"></textarea>
+    <div id="notesMeta">
+      <span id="notesCount">0 / 20000 字</span>
+      <span id="notesSaved"></span>
+    </div>
+    <button class="modal-btn modal-btn-primary" id="notesClose" style="margin-top:14px">收起本子</button>
+  </div>
+</div>
+
+<!-- ========== 新手教程 ========== -->
+<div id="tutorialModal" class="modal-mask hidden">
+  <div class="modal-card" id="tutorialCard">
+    <div class="modal-title">📖 新手教程</div>
+    <div class="modal-sub">三分钟看懂这个游戏</div>
+    <div class="tut-list">
+      <div class="tut-item"><div class="k">🎯 目标</div><div class="v">丧尸从<b>左右两侧</b>涌来攻击中央<b>大门</b>。门被打破即游戏结束 —— 你要做的就是让它别破。</div></div>
+      <div class="tut-item"><div class="k">🕹 移动</div><div class="v">电脑端 <b>WASD / 方向键</b>，手机端右下<b>摇杆</b>。从<b>门口</b>可以上下穿梭地表与地下室。</div></div>
+      <div class="tut-item"><div class="k">⚔ 战斗</div><div class="v">电脑端 <b>空格 / J</b> 挥剑，手机端左上<b>攻击键</b>。近战有距离限制，别贴脸也别站太远。</div></div>
+      <div class="tut-item"><div class="k">⬛ 建造</div><div class="v">点击<b>地下室的空格子</b>弹出建造菜单。金矿产<span style="color:#ffd700">金币◉</span>、农场产<span style="color:#5f5">食物♥</span>、发电厂产<span style="color:#5af">电力⚡</span>，仓库提升上限。</div></div>
+      <div class="tut-item"><div class="k">⚒ 升级</div><div class="v">造出<span style="color:#fa5">铁匠铺</span>后<b>点它</b>可以升级装备，共 7 级，同时提升血量、攻击和移速。</div></div>
+      <div class="tut-item"><div class="k">🛡 兵营</div><div class="v">兵营会持续产出<b>士兵</b>，自动帮你在地表拦截丧尸。人手不够时它比你自己砍更划算。</div></div>
+      <div class="tut-item"><div class="k">💎 资源堆</div><div class="v">地表会随机刷出<b>资源小堆</b>，走过去自动拾取。前期缺钱时值得专门跑一趟。</div></div>
+      <div class="tut-item"><div class="k">💾 存档</div><div class="v">每个账号 <b>10 个存档槽</b>。游戏中点<b>⏸ 暂停</b>可随时保存或退出回标题界面。</div></div>
+      <div class="tut-item"><div class="k">🌊 节奏</div><div class="v">波数越高，丧尸越多越硬，还会出现<b>快速型</b>和<b>坦克型</b>。趁前几波把经济铺开，别一开始就梭哈。</div></div>
+    </div>
+    <button class="modal-btn modal-btn-primary" id="tutorialClose" style="margin-top:16px">我知道了</button>
+  </div>
+</div>
+
 <!-- ========== 游戏本体 ========== -->
 <div id="gameContainer">
   <canvas id="game" width="960" height="720"></canvas>
@@ -155,6 +191,36 @@
   <div id="waveInfo"></div>
   <div id="messageLog"></div>
   <div id="buildMenu"></div>
+
+  <!-- ========== 标题界面 ========== -->
+  <div id="titleScreen" class="hidden">
+    <img id="tsBg" src="assets/title_bg.png?v=1" alt="">
+    <img id="tsLogo" src="assets/title_logo.png?v=1" alt="8-BIT 地牢求生">
+    <div id="tsTagline">
+      夜里丧尸会从两侧涌向大门。<br>
+      在地下挖出你的<b>房间</b>，攒<b>资源</b>、造<b>兵营</b>、升<b>装备</b>，<br>
+      守住这扇门。
+    </div>
+
+    <!-- 丧尸举着石碑，三个选项刻在碑上 -->
+    <div id="tsZombie">
+      <img src="assets/title_zombie.png?v=1" alt="">
+      <div id="tsOptions">
+        <button class="ts-opt" data-act="new"><span class="ico">▶</span>开始新游戏</button>
+        <button class="ts-opt" data-act="load"><span class="ico">💾</span>读取存档</button>
+        <button class="ts-opt" data-act="tutorial"><span class="ico">📖</span>新手教程</button>
+      </div>
+    </div>
+
+    <!-- 左侧记事本：点开写游戏心得 -->
+    <div id="tsNotepad" title="点击写下你的游戏心得">
+      <img src="assets/title_notepad.png?v=1" alt="游戏心得">
+    </div>
+    <div id="tsNotepadHint">← 点开写心得</div>
+
+    <div id="tsStatus"></div>
+  </div>
+
   <div id="overlay">
     <h1>☠ 8-BIT 地牢求生 ☠</h1>
     <h2>DUNGEON SURVIVAL</h2>
@@ -185,13 +251,24 @@
   <div id="attackBtn">⚔</div>
 </div>
 
+
+<!-- ========== 彩蛋：倒挂蜘蛛侠 ==========
+     刻意挂在 body 下而不是 #titleScreen 里：
+     #gameContainer 带 transform，会成为 fixed 定位的包含块，
+     再叠上 #titleScreen 的 overflow:hidden —— 放在里面就会被裁掉、
+     且压在心得面板底下看不见。 -->
+<div id="tsFlash"></div>
+<div id="tsSpider"><div class="web"></div><img src="assets/title_spider.png?v=1" alt=""></div>
+
 <!-- 按依赖顺序加载脚本：cache_bust 最先执行，保证其余脚本加载前就已清掉旧缓存/SW/IDB -->
-<script src="js/cache_bust.js?v=39"></script>
-<script src="js/config.js?v=39"></script>
-<script src="js/users.js?v=39"></script>
-<script src="js/assets.js?v=39"></script>
-<script src="js/engine.js?v=39"></script>
-<script src="js/render.js?v=39"></script>
-<script src="js/input.js?v=39"></script>
-<script src="js/main.js?v=39"></script></body>
+<script src="js/cache_bust.js?v=41"></script>
+<script src="js/config.js?v=41"></script>
+<script src="js/users.js?v=41"></script>
+<script src="js/api.js?v=41"></script>
+<script src="js/assets.js?v=41"></script>
+<script src="js/engine.js?v=41"></script>
+<script src="js/render.js?v=41"></script>
+<script src="js/input.js?v=41"></script>
+<script src="js/title.js?v=41"></script>
+<script src="js/main.js?v=41"></script></body>
 </html>
