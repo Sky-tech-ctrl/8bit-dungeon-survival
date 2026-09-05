@@ -62,23 +62,14 @@ Game.prototype.drawSurfaceHoles = function(ctx) {
     const x = c * TILE;
     const eaten = Math.min(d, 8);               // 地表层这 8px 被挖掉多少
 
+    // 挖掉就是挖掉 —— 只把天空补回去，不再往断面上画断茬、碎石之类的装饰。
+    // 那些「损毁土块」的贴图反而让人以为坑里还残留着什么可以站的东西。
     ctx.save();
     ctx.beginPath();
     ctx.rect(x, TOP, TILE, eaten);
     ctx.clip();
-    this.drawSky(ctx);                          // 按挖掉的深度把天空补回去
+    this.drawSky(ctx);
     ctx.restore();
-
-    // 新的地表边缘：锯齿断茬
-    ctx.fillStyle = COL.dirtDark;
-    for (let k = 0; k < TILE; k += 4) {
-      ctx.fillRect(x + k, TOP + eaten, 4, 2 + ((c * 13 + k) % 3));
-    }
-    if (d < 8) {
-      // 还没挖穿：剩下的土层压暗，读得出「这里薄了」
-      ctx.fillStyle = `rgba(0,0,0,${(0.08 + (d / 8) * 0.42).toFixed(3)})`;
-      ctx.fillRect(x, TOP + eaten, TILE, 8 - eaten);
-    }
   }
 };
 
@@ -91,27 +82,12 @@ Game.prototype.drawHoleShafts = function(ctx) {
     const x = c * TILE;
     const floor = GROUND_Y - 8 + d;             // 坑底
 
-    // 掏空：越深越暗，制造纵深
+    // 纯粹的空腔：越深越暗，制造纵深。
+    // 不画坑壁、碎石、坑底堆土 —— 挖空的地方就该是空的。
     for (let y = GROUND_Y; y < floor; y++) {
       const t = (y - GROUND_Y) / Math.max(1, floor - GROUND_Y);
       ctx.fillStyle = `rgba(0,0,0,${(0.55 + t * 0.35).toFixed(3)})`;
       ctx.fillRect(x, y, TILE, 1);
-    }
-    // 坑壁：两侧留出被挖开的土层断面
-    ctx.fillStyle = COL.dirtDark;
-    ctx.fillRect(x, GROUND_Y, 3, floor - GROUND_Y);
-    ctx.fillRect(x + TILE - 3, GROUND_Y, 3, floor - GROUND_Y);
-    for (let k = 0; k < floor - GROUND_Y; k += 7) {
-      ctx.fillStyle = COL.stoneDark;
-      ctx.fillRect(x + 1, GROUND_Y + k, 3, 4);
-      ctx.fillRect(x + TILE - 4, GROUND_Y + k + 3, 3, 4);
-    }
-    // 坑底堆积的碎土
-    ctx.fillStyle = COL.dirt;
-    ctx.fillRect(x, floor - 4, TILE, 4);
-    ctx.fillStyle = COL.dirtDark;
-    for (let k = 0; k < TILE; k += 6) {
-      ctx.fillRect(x + k + ((c + k) % 3), floor - 6, 3, 3);
     }
   }
 };
