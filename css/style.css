@@ -148,7 +148,17 @@ textarea {
 }
 #devPanel .dev-head button:hover { color: #ff8f8f; }
 
-#devPanel .dev-body { padding: 8px 10px; }
+/* 项目变多之后必须能滚，否则小屏上底部的按钮根本够不着 */
+#devPanel .dev-body { padding: 8px 10px; max-height: 62vh; overflow-y: auto; }
+#devPanel .dev-section {
+  margin: 10px 0 6px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid #4a3a5a;
+  color: #b98fe0;
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+#devPanel .dev-section:first-child { margin-top: 0; }
 #devPanel .dev-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: 8px; margin-bottom: 6px;

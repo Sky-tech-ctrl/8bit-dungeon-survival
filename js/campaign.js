@@ -12,7 +12,25 @@
 
 const CampaignUI = (() => {
   const LS_PREFIX = 'campaign_progress_';
+  const LS_DEVICE = 'game_device';
   let game = null;
+
+  // 主线模式绕开了存档界面，而设备选择原本只在那里 ——
+  // 结果手机玩家进主线只能拿到默认的电脑端布局。所以关卡选择界面
+  // 必须自带一份设备选择，并把结果记下来，下次不用再点。
+  function savedDevice() {
+    try {
+      const v = localStorage.getItem(LS_DEVICE);
+      if (v === 'pc' || v === 'mobile') return v;
+    } catch (_) {}
+    if (game && game.deviceMode) return game.deviceMode;
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i
+      .test(navigator.userAgent || '') ? 'mobile' : 'pc';
+  }
+
+  function rememberDevice(v) {
+    try { localStorage.setItem(LS_DEVICE, v); } catch (_) {}
+  }
 
   function init(g) { game = g; }
 
@@ -88,7 +106,7 @@ const CampaignUI = (() => {
         (lv <= done ? '<div class="lv-tick">✓</div>' : '');
       if (unlocked) {
         cell.title = cfg.desc;
-        cell.onclick = () => { Sound.sfx('click'); close(m); startLevel(lv); };
+        cell.onclick = () => { Sound.sfx('click'); close(m); startLevel(lv, m._device ? m._device() : null); };
       }
       grid.appendChild(cell);
     });
@@ -98,6 +116,37 @@ const CampaignUI = (() => {
     tip.className = 'lv-tip';
     tip.textContent = '第 ' + CAMPAIGN_DISASTER_FROM + ' 关起会出现自然灾害：陨石、地震、火山喷发';
     card.appendChild(tip);
+
+    // ---- 设备选择 ----
+    let device = savedDevice();
+    const ds = document.createElement('div');
+    ds.className = 'device-section';
+    ds.innerHTML = '<div class="ds-title">▼ 请选择你的设备类型 ▼</div>';
+    const rowEl = document.createElement('div');
+    rowEl.className = 'device-select-row';
+    const hint = document.createElement('div');
+    hint.className = 'ds-hint';
+    const mk = (val, emoji, label) => {
+      const b = document.createElement('button');
+      b.className = 'ds-btn';
+      b.innerHTML = '<span class="emoji">' + emoji + '</span>' + label;
+      b.onclick = () => { device = val; rememberDevice(val); paint(); Sound.sfx('click'); };
+      return b;
+    };
+    const pcB = mk('pc', '💻', '电脑端');
+    const mbB = mk('mobile', '📱', '手机端');
+    const paint = () => {
+      pcB.classList.toggle('selected', device === 'pc');
+      mbB.classList.toggle('selected', device === 'mobile');
+      hint.textContent = device === 'mobile'
+        ? '📱 竖握使用 · 画面旋转横屏 · 摇杆+攻击'
+        : '💻 WASD移动 · 空格/J挥剑 · 鼠标点击建造';
+    };
+    rowEl.appendChild(pcB); rowEl.appendChild(mbB);
+    ds.appendChild(rowEl); ds.appendChild(hint);
+    card.appendChild(ds);
+    paint();
+    m._device = () => device;
 
     const back = document.createElement('button');
     back.className = 'modal-btn modal-btn-secondary';
@@ -111,12 +160,12 @@ const CampaignUI = (() => {
 
   // ---------------------------------------------------------------- 开打
 
-  function startLevel(lv) {
+  function startLevel(lv, device) {
     if (!game) return;
-    // 设备选择沿用既有那套（存档界面里的），这里直接取上次的选择
-    const mode = game.deviceMode || 'pc';
+    const dev = device || savedDevice();
+    rememberDevice(dev);
     game.beginCampaignLevel(lv);
-    game.startAfterAuth(mode);
+    game.startAfterAuth(dev);
   }
 
   // ---------------------------------------------------------------- 通关结算
@@ -140,7 +189,7 @@ const CampaignUI = (() => {
       const nxt = document.createElement('button');
       nxt.className = 'modal-btn modal-btn-primary';
       nxt.textContent = '▶ 进入第 ' + (level + 1) + ' 关';
-      nxt.onclick = () => { close(m); startLevel(level + 1); };
+      nxt.onclick = () => { close(m); startLevel(level + 1, savedDevice()); };
       card.appendChild(nxt);
     }
     const back = document.createElement('button');

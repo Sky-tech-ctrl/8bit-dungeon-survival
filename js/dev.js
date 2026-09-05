@@ -59,6 +59,27 @@ const DevMode = (() => {
     return row(label, wrap);
   }
 
+  /** 分节标题：面板项目变多之后，没有分节就是一堵墙。 */
+  function section(title) {
+    const d = document.createElement('div');
+    d.className = 'dev-section';
+    d.textContent = title;
+    return d;
+  }
+
+  /** 一行并排的按钮，用于「立即触发」这类一次性动作。 */
+  function buttonRow(label, buttons) {
+    const wrap = document.createElement('div');
+    wrap.className = 'dev-field';
+    for (const [txt, fn] of buttons) {
+      const b = document.createElement('button');
+      b.textContent = txt;
+      b.onclick = fn;
+      wrap.appendChild(b);
+    }
+    return row(label, wrap);
+  }
+
   function toggleField(label, get, set) {
     const wrap = document.createElement('div');
     wrap.className = 'dev-field';
@@ -94,6 +115,8 @@ const DevMode = (() => {
     const fields = [];
     const add = (el) => { fields.push(el); body.appendChild(el); };
 
+    body.appendChild(section('局面'));
+
     add(numberField('大门血量',
       () => Math.round(game.doorHp),
       v => { game.doorHp = Math.max(0, Math.min(game.doorMaxHp, v)); game.updateUI(); },
@@ -115,12 +138,80 @@ const DevMode = (() => {
       v => setZombieCount(Math.max(0, Math.floor(v))),
       { max: 200, extra: [['清空', () => setZombieCount(0)], ['+5', () => setZombieCount(game.zombies.length + 5)]] }));
 
+    body.appendChild(section('作弊'));
     add(toggleField('玩家无敌', () => game.dev.god, v => { game.dev.god = v; }));
     add(toggleField('大门无敌', () => game.dev.doorGod, v => { game.dev.doorGod = v; }));
     add(toggleField('无限资源', () => game.dev.infiniteRes, v => {
       game.dev.infiniteRes = v;
       if (v) game.updateUI();
     }));
+
+    // ---------------- 自然灾害 ----------------
+    body.appendChild(section('自然灾害'));
+
+    add(toggleField('天灾开关',
+      () => !!(game.disaster && game.disaster.enabled),
+      v => { if (game.disaster) game.disaster.enable(v); }));
+
+    // 落点列：单独一个输入框，下面的「立即触发」都打这一列。
+    // 不做成每个灾害各带一个参数 —— 调试时想改的是「砸哪儿」，不是砸几次。
+    let strikeCol = Math.floor(BASEMENT_COLS / 2);
+    add(numberField('落点列',
+      () => strikeCol,
+      v => { strikeCol = Math.max(0, Math.min(BASEMENT_COLS - 1, Math.floor(v))); },
+      { max: BASEMENT_COLS - 1 }));
+
+    add(buttonRow('立即触发', [
+      ['☄陨石', () => game.disaster && game.disaster.strike('meteor', strikeCol)],
+      ['〰地震', () => game.disaster && game.disaster.strike('quake', strikeCol)],
+      ['🌋火山', () => game.disaster && game.disaster.strike('volcano', strikeCol)],
+    ]));
+
+    add(numberField('下次倒计时',
+      () => (game.disaster && game.disaster.next) ? Math.ceil(game.disaster.timer) : 0,
+      v => { if (game.disaster && game.disaster.next) game.disaster.timer = Math.max(0, v); },
+      { max: 999, extra: [['重排', () => { if (game.disaster) game.disaster.schedule(); }]] }));
+
+    add(buttonRow('地表', [
+      ['全部修复', () => { game.surface.fill(true); game.updateUI(); }],
+      ['随机砸穿5列', () => {
+        for (let i = 0; i < 5; i++) game.breakSurface(Math.floor(Math.random() * BASEMENT_COLS));
+      }],
+    ]));
+
+    add(toggleField('强制显示预报',
+      () => !!game.hasForecast,
+      v => {
+        // 直接改标志位，不用真去建一座预报站 —— 调试 HUD 时这样最快。
+        // 注意 applyRoomEffects() 会按实际房间重算，所以这个开关是「临时」的。
+        game.hasForecast = v;
+        if (v && game.disaster) game.disaster.revealNext();
+        game.updateUI();
+      }));
+
+    // ---------------- 主线模式 ----------------
+    body.appendChild(section('主线模式'));
+
+    add(numberField('当前关卡',
+      () => game.campaignLevel || 1,
+      v => {
+        game.mode = 'campaign';
+        game.campaignLevel = Math.max(1, Math.min(CAMPAIGN.length, Math.floor(v)));
+        game.levelTargetWaves = CAMPAIGN[game.campaignLevel - 1].waves;
+        game.updateUI();
+      },
+      { min: 1, max: CAMPAIGN.length,
+        extra: [['直接通关', () => { game.wave = game.levelTargetWaves || 1; game.checkCampaignClear(); }]] }));
+
+    add(buttonRow('房间解锁', [
+      ['全部解锁', () => { game.mode = 'endless'; game.updateUI(); game.log('🛠 已解除房间解锁限制', '#d9f'); }],
+      ['按关卡限制', () => { game.mode = 'campaign'; game.updateUI(); }],
+    ]));
+
+    add(buttonRow('通关进度', [
+      ['全部通关', () => setAllProgress(CAMPAIGN.length)],
+      ['清空进度', () => setAllProgress(0)],
+    ]));
 
     const foot = document.createElement('div');
     foot.className = 'dev-foot';
@@ -151,6 +242,18 @@ const DevMode = (() => {
         if (w && w._sync) w._sync();
       }
     }, 400);
+  }
+
+  /** 直接改写主线通关进度（调试关卡选择界面用）。 */
+  async function setAllProgress(n) {
+    let user = null;
+    try { user = await AuthAPI.current(); } catch (_) {}
+    try {
+      const k = 'campaign_progress_' + (user || '_local');
+      if (n > 0) localStorage.setItem(k, String(n));
+      else localStorage.removeItem(k);
+    } catch (_) {}
+    if (game) game.log('🛠 主线进度已设为 ' + n + ' 关', '#d9f');
   }
 
   /** 把场上丧尸数调整到目标值：多则删、少则补。 */

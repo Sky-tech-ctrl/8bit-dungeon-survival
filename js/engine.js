@@ -206,8 +206,20 @@ class Game {
       authSubmit.textContent = '请稍候…';
       try {
         const r = isRegister ? await AuthAPI.register(u, p) : await AuthAPI.login(u, p);
-        if (r.ok) showSave(pendingIntent);
-        else authError.textContent = r.msg;
+        if (r.ok) {
+          // 登录成功后要走的下一步，必须和「已登录时点开始新游戏」保持一致：
+          // 开新档先问模式（主线/无尽），读档才直接进存档界面。
+          // 漏掉这一步的话，首次注册的玩家永远看不到模式选择。
+          if (pendingIntent === 'new' && window.CampaignUI) {
+            authModal.classList.add('hidden');
+            CampaignUI.init(game);
+            CampaignUI.askMode(() => showSave('new'));
+          } else {
+            showSave(pendingIntent);
+          }
+        } else {
+          authError.textContent = r.msg;
+        }
       } catch (e) {
         authError.textContent = '连接失败：' + (e && e.message ? e.message : e);
       } finally {
