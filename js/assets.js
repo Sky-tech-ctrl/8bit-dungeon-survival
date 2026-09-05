@@ -17,10 +17,12 @@ class AssetLoader {
     this.load('soldier_sprite', 'assets/soldier_sprite.png');
     // 山丘背景贴图
     this.load('hills_bg', 'assets/hills_bg.jpg');
+    // 天灾：坠落中的陨石（3 帧）
+    this.load('meteor', 'assets/meteor.png');
   }
 
   // 资源版本号（每次改贴图时同步更新，强制浏览器绕过缓存）
-  static VERSION = '28';
+  static VERSION = '29';
 
   load(key, src) {
     const img = new Image();

@@ -15,6 +15,7 @@
    assets/title_zombie.png    右侧探出的丧尸半身 + 手持石碑（PVZ 风）
    assets/title_notepad.png   左侧探出的记事本（点击开启「游戏心得」）
    assets/title_spider.png    彩蛋：倒挂的蜘蛛侠（Q 版圆头）
+   assets/meteor.png          坠落中的陨石（3 帧，游戏内天灾用）
 
  运行：python make_title_art.py
 ========================================================================
@@ -886,6 +887,86 @@ def make_spider():
 
 
 # ======================================================================
+# ⑥ 坠落中的陨石（游戏内天灾用）
+# ======================================================================
+def make_meteor():
+    """
+    坠落中的陨石：一块烧红的岩石 + 拖在身后的火尾。
+
+    做成横向 3 帧的循环，帧间只改火焰的形状和亮度 —— 岩石本体保持不动。
+    火焰是这个东西唯一在动的部分，岩石跟着抖只会显得廉价。
+
+    贴图整体朝**右下**（火尾在左上），因为游戏里陨石是从左上方斜着砸下来的；
+    render 那边只要按这个朝向画，不用再做旋转。
+    """
+    FW, FH, FRAMES, SCALE = 30, 30, 3, 4
+    img, d = canvas(FW * FRAMES, FH)
+
+    ROCK = (86, 74, 70)
+    ROCK_D = (54, 46, 44)
+    ROCK_L = (122, 106, 100)
+    HOT = (208, 96, 40)          # 迎风面被烧红
+    HOT_L = (255, 168, 72)
+    FLAME1 = (255, 96, 32)
+    FLAME2 = (255, 176, 56)
+    FLAME3 = (255, 232, 150)
+    OL = (26, 18, 20)
+
+    for f in range(FRAMES):
+        ox = f * FW
+
+        # ---------- 火尾：从岩石左上方甩出去 ----------
+        # 逐帧改变舌头的长度与摆动，让火看起来在燃烧而不是贴了张纸
+        for i in range(14):
+            t = i / 13.0
+            wob = math.sin(t * 3.0 + f * 2.1) * 2.2
+            fx = ox + 17 - int(t * 17) + int(wob)
+            fy = 17 - int(t * 16) + int(wob * 0.6)
+            w = max(1, int(7 - t * 5))
+            # 外焰 → 中焰 → 焰心，三层依次收窄
+            rect(d, fx - w // 2, fy - w // 2, w, w, FLAME1)
+            if t < 0.72:
+                w2 = max(1, w - 2)
+                rect(d, fx - w2 // 2, fy - w2 // 2, w2, w2, FLAME2)
+            if t < 0.4:
+                rect(d, fx - 1, fy - 1, 2, 2, FLAME3)
+        # 甩出去的火星
+        for k in range(4):
+            sx = ox + 6 - k * 2 + ((f + k) % 3)
+            sy = 6 - k * 2 + ((f * 2 + k) % 3)
+            rect(d, sx, sy, 2, 2, FLAME2 if k % 2 else FLAME3)
+
+        # ---------- 岩石本体：不规则多边形，别画成圆球 ----------
+        body = [
+            (14, 10, 10, 4), (12, 13, 14, 4), (11, 16, 16, 4),
+            (12, 19, 14, 4), (14, 22, 10, 3),
+        ]
+        for (bx, by, bw, bh) in body:
+            rect(d, ox + bx - 1, by - 1, bw + 2, bh + 2, OL)
+        for (bx, by, bw, bh) in body:
+            rect(d, ox + bx, by, bw, bh, ROCK)
+
+        # 迎风面（左上）被烧红，背风面留暗 —— 一眼看出运动方向
+        rect(d, ox + 12, 13, 5, 3, HOT)
+        rect(d, ox + 11, 16, 5, 3, HOT)
+        rect(d, ox + 12, 12, 4, 2, HOT_L)
+        rect(d, ox + 22, 17, 4, 6, ROCK_D)
+        rect(d, ox + 20, 21, 5, 3, ROCK_D)
+
+        # 陨石坑纹理（岩石上的凹坑），固定不动
+        for (cx0, cy0, cr) in [(17, 15, 2), (20, 19, 2), (15, 20, 1)]:
+            circle(d, ox + cx0, cy0, cr, ROCK_D)
+            px(d, ox + cx0 - 1, cy0 - 1, ROCK_L)
+
+        # 底部高光棱线
+        rect(d, ox + 15, 22, 6, 1, ROCK_L)
+
+    out = upscale(img, SCALE)
+    out.save(os.path.join(OUT, 'meteor.png'))
+    print('  meteor.png         ', out.size, ' 单帧 {}x{} ×{} 帧'.format(FW, FH, FRAMES))
+
+
+# ======================================================================
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
     print('生成标题界面美术资源 ...')
@@ -894,4 +975,5 @@ if __name__ == '__main__':
     make_zombie_tablet()
     make_notepad()
     make_spider()
+    make_meteor()
     print('完成。')

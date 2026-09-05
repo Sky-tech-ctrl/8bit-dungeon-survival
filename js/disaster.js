@@ -20,19 +20,19 @@ const DISASTER_TYPES = {
     name: '陨石', icon: '☄',
     color: '#ff8844',
     warn: '陨石正在坠落',
-    desc: '砸出一个大坑，中心洞穿、边缘削薄',
+    desc: '砸出一个碗形深坑，中心可挖穿数格',
   },
   quake: {
     name: '地震', icon: '〰',
     color: '#c9a227',
     warn: '地壳开始震动',
-    desc: '满地小坑，地下室大范围震损',
+    desc: '满地浅坑，地下室大范围震损',
   },
   volcano: {
     name: '火山喷发', icon: '🌋',
     color: '#ff4422',
     warn: '地底传来轰鸣',
-    desc: '均匀侵蚀整个地表，全场同时变薄',
+    desc: '均匀侵蚀整个地表，全场同时下沉',
   },
 };
 
@@ -122,7 +122,17 @@ class DisasterSystem {
     for (let i = this.effects.length - 1; i >= 0; i--) {
       const e = this.effects[i];
       e.t -= dt;
-      if (e.vy != null) { e.x += (e.vx || 0) * dt; e.y += e.vy * dt; }
+      if (e.kind === 'falling') {
+        // 从起点插值到落点，并叠一点下坠加速度 ——
+        // 匀速直线会显得像在滑翔，而不是被引力拽下来
+        const p = Math.min(1, 1 - Math.max(0, e.t) / e.dur);
+        const ease = p * p * 0.35 + p * 0.65;
+        e.x = e.sx + (e.tx - e.sx) * ease;
+        e.y = e.sy + (e.ty - e.sy) * ease;
+        if (e.t <= 0) { this._meteorImpact(e.col); this.effects.splice(i, 1); continue; }
+      } else if (e.vy != null) {
+        e.x += (e.vx || 0) * dt; e.y += e.vy * dt;
+      }
       if (e.t <= 0) this.effects.splice(i, 1);
     }
   }
@@ -133,9 +143,11 @@ class DisasterSystem {
     const g = this.game;
     const t = DISASTER_TYPES[kind];
     g.log(`${t.icon} ${t.name}降临！`, t.color);
-    Sound.sfx('doorHit');
-    g.shakeScreen();
-    this.shakeUntil = performance.now() / 1000 + 1.6;
+    if (kind !== 'meteor') {          // 陨石的音效与震动留到真正落地那一刻
+      Sound.sfx('doorHit');
+      g.shakeScreen();
+      this.shakeUntil = performance.now() / 1000 + 1.6;
+    }
 
     if (kind === 'meteor') this._meteor(col);
     else if (kind === 'quake') this._quake(col);
@@ -145,39 +157,58 @@ class DisasterSystem {
   }
 
   _meteor(col) {
+    // 陨石不是「一按就出坑」—— 先让它从左上方带着火尾飞进来，
+    // 落地那一刻才真正砸出坑。没有这段坠落，天灾就只是数值突变，
+    // 玩家连躲的念头都来不及产生。
+    const tx = col * TILE + TILE / 2;
+    this.effects.push({
+      kind: 'falling', col,
+      sx: tx - 300, sy: GROUND_Y - 300,    // 从左上 45° 斜切进来
+      tx, ty: GROUND_Y - 4,
+      x: tx - 300, y: GROUND_Y - 300,
+      t: 0.85, dur: 0.85,
+    });
+  }
+
+  /** 陨石真正落地：挖出一个碗形坑。 */
+  _meteorImpact(col) {
     const g = this.game;
-    // 一个**大坑**：中心整段洞穿，边缘按距离递减地削薄，
-    // 所以坑沿是斜的而不是一刀切下去 —— 这才像被砸出来的。
-    const radius = 2 + Math.floor(Math.random() * 3);        // 2~4，总宽 5~9 列
+    // 碗形：中心最深，向外按二次曲线变浅 —— 现实里的撞击坑就是这个剖面，
+    // 用线性递减会挖出一个 V 形尖底，看着像被斧头劈的。
+    const radius = 3 + Math.floor(Math.random() * 3);          // 3~5 列
+    const maxDepth = TILE * (1.4 + Math.random() * 1.0);       // 1.4~2.4 格深
     for (let d = -radius; d <= radius; d++) {
       const c = col + d;
       if (c < 0 || c >= BASEMENT_COLS) continue;
-      const t = 1 - Math.abs(d) / (radius + 1);              // 中心 1，边缘趋 0
-      // 中心那几列直接洞穿，越靠边只是削薄
-      g.damageSurface(c, t >= 0.7 ? 1 : t * 0.9);
+      const n = d / (radius + 0.5);
+      const depth = maxDepth * (1 - n * n);                    // 抛物线碗底
+      if (depth > 0) g.carveGround(c, depth);
     }
-    // 冲击波额外砸伤中心正下方的房间
-    for (let d = -1; d <= 1; d++) g.damageRoomsInColumn(col + d, 70, 3);
 
+    Sound.sfx('doorHit');
+    g.shakeScreen();
+    this.shakeUntil = performance.now() / 1000 + 1.2;
     this.effects.push({ kind: 'crater', x: col * TILE + TILE / 2, y: GROUND_Y,
                         t: 1.4, w: (radius * 2 + 1) * TILE });
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 34; i++) {
       g.spawnParticles((col + (Math.random() - 0.5) * radius * 2) * TILE,
-                       GROUND_Y - Math.random() * 24, '#ff8844', 1);
+                       GROUND_Y - Math.random() * 26, '#ff8844', 1);
     }
   }
 
   _quake(col) {
     const g = this.game;
-    // **满地小坑**：撒出很多个浅坑，单次基本穿不透，
-    // 但地震反复来几次，整片地表就会被啃得千疮百孔。
-    // 这跟陨石「一个大洞」形成鲜明对比 —— 面积广、深度浅。
-    const pits = 10 + Math.floor(Math.random() * 8);         // 10~17 个
-    const hit = new Set();
+    // **满地小坑**：撒出很多个浅碗，每个只有 1~2 列宽。
+    // 和陨石同样是真实的地形凹陷，区别只在「多而浅」对「一个而深」。
+    const pits = 8 + Math.floor(Math.random() * 7);            // 8~14 个
     for (let i = 0; i < pits; i++) {
       const c = Math.floor(Math.random() * BASEMENT_COLS);
-      hit.add(c);
-      g.damageSurface(c, 0.28 + Math.random() * 0.34);       // 浅
+      const depth = TILE * (0.35 + Math.random() * 0.45);      // 0.35~0.8 格
+      g.carveGround(c, depth);
+      // 小坑也有坑沿，只是只波及紧邻的一列
+      if (Math.random() < 0.6) g.carveGround(c - 1, depth * 0.45);
+      if (Math.random() < 0.6) g.carveGround(c + 1, depth * 0.45);
+      g.spawnParticles(c * TILE + TILE / 2, GROUND_Y, '#c9a227', 4);
     }
     // 地下的破坏才是地震的主场：沿一条水平带广域震坏房间
     const row = 1 + Math.floor(Math.random() * Math.max(1, BASEMENT_ROWS - 3));
@@ -185,24 +216,22 @@ class DisasterSystem {
       if (r.row <= row + 1 && r.row + r.size.h >= row) g.damageRoom(r, 45);
     }
     this.effects.push({ kind: 'quake', t: 2.0 });
-    for (const c of hit) g.spawnParticles(c * TILE + TILE / 2, GROUND_Y, '#c9a227', 4);
   }
 
   _volcano(col) {
     const g = this.game;
-    // **均匀侵蚀整个地表**：所有列同时削掉相同的一层，一视同仁。
-    // 这是三种天灾里唯一「全场生效」的 —— 它不挑地方，它就是把整层地皮
-    // 磨薄一圈。单次通常穿不透，但每喷发一次全场就离塌陷更近一步，
-    // 而且已经被砸薄过的地方会先破。
-    const erosion = 0.22 + Math.random() * 0.16;
+    // **均匀侵蚀整个地表**：所有列同时被削掉相同的一层，一视同仁。
+    // 这是三种天灾里唯一「全场生效」的 —— 它不挑地方，就是把整层地皮
+    // 磨掉一圈。单次挖得浅，但每喷发一次全场就整体下沉一截，
+    // 而且已经被砸出坑的地方会先见底。
+    const erosion = TILE * (0.22 + Math.random() * 0.16);      // 每次约 0.2~0.4 格
     let breached = 0;
     for (let c = 0; c < BASEMENT_COLS; c++) {
-      if (g.damageSurface(c, erosion)) breached++;
+      if (g.carveGround(c, erosion)) breached++;
     }
-    g.log(`🌋 熔岩漫过整片地表，全场侵蚀 ${Math.round(erosion * 100)}%` +
-          (breached ? `，${breached} 处塌陷` : ''), '#ff6644');
+    g.log(`🌋 熔岩漫过整片地表，全场下沉 ${Math.round(erosion)}px` +
+          (breached ? `，${breached} 处塌穿` : ''), '#ff6644');
 
-    // 喷发口附近额外掉岩浆，让「从哪里喷的」仍然看得出来
     for (let i = 0; i < 20; i++) {
       this.effects.push({
         kind: 'lava',
@@ -213,9 +242,7 @@ class DisasterSystem {
         t: 1.4 + Math.random(),
       });
     }
-    // 全场覆盖一层熔岩光，强调「平等」
     this.effects.push({ kind: 'ash', t: 2.2 });
-    this.effects.push({ kind: 'crater', x: col * TILE + TILE / 2, y: GROUND_Y, t: 1.6, w: 6 * TILE });
   }
 
   // ------------------------------------------------------------- 给 HUD

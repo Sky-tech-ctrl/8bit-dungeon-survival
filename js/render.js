@@ -48,82 +48,70 @@ Game.prototype.render = function() {
 //      正确做法是把天空按破口形状裁剪后重绘一遍，颜色才对得上。
 //   2. 地下室层（drawBasement 之后）：补一段向下的竖井。
 //      地下室是整块重填的，早画会被盖掉。
+// ---- 地形坑洞 ----
+// 坑是**真实的地形凹陷**，不是贴在地面上的花纹。所以要分两个时机画：
+//   1. 地表层（drawGround 之后）：把被挖掉的草皮换回天空
+//   2. 坑腔（drawBasement 之后）：挖进地下室的那一段要掏空，
+//      不能早画 —— 地下室是整块重填的，早画会被盖掉
 Game.prototype.drawSurfaceHoles = function(ctx) {
-  if (!this.surface) return;
-  // 地表层里**画面上真正看得见的只有 GROUND_Y 以上那 8px**（草皮）——
-  // GROUND_Y 往下的表层土随后会被 drawBasement 整块重绘覆盖掉。
-  // 所以 0~100% 的侵蚀必须映射到这 8px 上；按 16px 算的话，
-  // 侵蚀超过 50% 之后画面就不再变化，玩家看不出「快穿了」。
-  const TOP = GROUND_Y - 8;
-  const FULL = 8;
+  if (!this.craterDepth) return;
+  const TOP = GROUND_Y - 8;                     // 草皮顶
   for (let c = 0; c < BASEMENT_COLS; c++) {
-    const t = this.surfaceIntegrity(c);
-    if (t >= 1) continue;                // 完好就什么都不用做
+    const d = this.groundDepth(c);
+    if (d <= 0) continue;
     const x = c * TILE;
-    // 被侵蚀掉的厚度。半侵蚀必须画出来 —— 否则火山「全场变薄」在画面上
-    // 完全看不见，玩家只会觉得地突然就塌了。
-    const eaten = Math.ceil((1 - t) * FULL);
+    const eaten = Math.min(d, 8);               // 地表层这 8px 被挖掉多少
 
     ctx.save();
     ctx.beginPath();
     ctx.rect(x, TOP, TILE, eaten);
     ctx.clip();
-    this.drawSky(ctx);                   // 按侵蚀深度把天空补回去
+    this.drawSky(ctx);                          // 按挖掉的深度把天空补回去
     ctx.restore();
 
-    // 侵蚀面的锯齿断茬，让边界不是一条直线
+    // 新的地表边缘：锯齿断茬
     ctx.fillStyle = COL.dirtDark;
     for (let k = 0; k < TILE; k += 4) {
-      const j = ((c * 13 + k) % 3);
-      ctx.fillRect(x + k, TOP + eaten, 4, 2 + j);
+      ctx.fillRect(x + k, TOP + eaten, 4, 2 + ((c * 13 + k) % 3));
     }
-    if (t > 0) {
-      // 还没穿：剩下的土层按侵蚀程度递进压暗。
-      // 固定压暗值读不出「25% 和 75% 有什么不同」—— 地表层总共才 16px，
-      // 光靠厚度变化眼睛分辨不出来，得靠明度补上这个信息。
-      ctx.fillStyle = `rgba(0,0,0,${(0.08 + (1 - t) * 0.42).toFixed(3)})`;
-      ctx.fillRect(x, TOP + eaten, TILE, FULL - eaten);
-      // 侵蚀过半时补几道裂纹，进一步区分「快穿了」和「刚被蹭到」
-      if (t < 0.5) {
-        ctx.fillStyle = 'rgba(0,0,0,0.45)';
-        for (let k = 2; k < TILE; k += 9) {
-          ctx.fillRect(x + k + ((c * 5 + k) % 3), TOP + eaten + 1, 1, FULL - eaten - 1);
-        }
-      }
-    }
-
-    // 两侧断茬
-    ctx.fillStyle = COL.dirtDark;
-    for (let k = 0; k < 5; k++) {
-      const h = 3 + ((c * 7 + k * 13) % 6);
-      ctx.fillRect(x - 3, TOP + eaten - 6 + k * 3, 4, h);
-      ctx.fillRect(x + TILE - 1, TOP + eaten - 6 + k * 3, 4, h);
-    }
-    if (t <= 0) {
-      ctx.fillStyle = COL.grassDark;
-      ctx.fillRect(x - 3, GROUND_Y - 13, 4, 3);
-      ctx.fillRect(x + TILE - 1, GROUND_Y - 13, 4, 3);
+    if (d < 8) {
+      // 还没挖穿：剩下的土层压暗，读得出「这里薄了」
+      ctx.fillStyle = `rgba(0,0,0,${(0.08 + (d / 8) * 0.42).toFixed(3)})`;
+      ctx.fillRect(x, TOP + eaten, TILE, 8 - eaten);
     }
   }
 };
 
-// ---- 破口向下的竖井（必须在 drawBasement 之后画）----
+// ---- 坑腔（必须在 drawBasement 之后画）----
 Game.prototype.drawHoleShafts = function(ctx) {
-  if (!this.surface) return;
+  if (!this.craterDepth) return;
   for (let c = 0; c < BASEMENT_COLS; c++) {
-    if (!this.isHole(c)) continue;
+    const d = this.groundDepth(c);
+    if (d <= 8) continue;                       // 还没挖进地下室
     const x = c * TILE;
-    // 一格深的敞口，越往下越暗
-    for (let k = 0; k < TILE; k++) {
-      const a = 0.75 - k / TILE * 0.45;
-      ctx.fillStyle = `rgba(0,0,0,${a.toFixed(3)})`;
-      ctx.fillRect(x, GROUND_Y + k, TILE, 1);
+    const floor = GROUND_Y - 8 + d;             // 坑底
+
+    // 掏空：越深越暗，制造纵深
+    for (let y = GROUND_Y; y < floor; y++) {
+      const t = (y - GROUND_Y) / Math.max(1, floor - GROUND_Y);
+      ctx.fillStyle = `rgba(0,0,0,${(0.55 + t * 0.35).toFixed(3)})`;
+      ctx.fillRect(x, y, TILE, 1);
     }
-    // 边缘碎石
-    ctx.fillStyle = COL.stoneDark;
-    for (let k = 0; k < 4; k++) {
-      ctx.fillRect(x, GROUND_Y + k * 6, 3, 4);
-      ctx.fillRect(x + TILE - 3, GROUND_Y + 3 + k * 6, 3, 4);
+    // 坑壁：两侧留出被挖开的土层断面
+    ctx.fillStyle = COL.dirtDark;
+    ctx.fillRect(x, GROUND_Y, 3, floor - GROUND_Y);
+    ctx.fillRect(x + TILE - 3, GROUND_Y, 3, floor - GROUND_Y);
+    for (let k = 0; k < floor - GROUND_Y; k += 7) {
+      ctx.fillStyle = COL.stoneDark;
+      ctx.fillRect(x + 1, GROUND_Y + k, 3, 4);
+      ctx.fillRect(x + TILE - 4, GROUND_Y + k + 3, 3, 4);
+    }
+    // 坑底堆积的碎土
+    ctx.fillStyle = COL.dirt;
+    ctx.fillRect(x, floor - 4, TILE, 4);
+    ctx.fillStyle = COL.dirtDark;
+    for (let k = 0; k < TILE; k += 6) {
+      ctx.fillRect(x + k + ((c + k) % 3), floor - 6, 3, 3);
     }
   }
 };
@@ -1114,7 +1102,30 @@ Game.prototype.drawDisasterFX = function(ctx) {
   }
 
   for (const e of d.effects) {
-    if (e.kind === 'crater') {
+    if (e.kind === 'falling') {
+      // 拖尾先画，陨石本体压在上面
+      ctx.save();
+      for (let k = 1; k <= 10; k++) {
+        const t = k / 10;
+        const tx = e.x - (e.tx - e.sx) * t * 0.16;
+        const ty = e.y - (e.ty - e.sy) * t * 0.16;
+        ctx.fillStyle = `rgba(255,${120 - k * 8},40,${(0.5 * (1 - t)).toFixed(3)})`;
+        const sz = Math.max(2, 10 - k);
+        ctx.fillRect(tx - sz / 2, ty - sz / 2, sz, sz);
+      }
+      const spr = this.assets.get('meteor');
+      if (spr) {
+        const FR = 3, fw = spr.naturalWidth / FR, fh = spr.naturalHeight;
+        const fi = Math.floor(performance.now() / 70) % FR;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(spr, fi * fw, 0, fw, fh, e.x - fw / 2, e.y - fh / 2, fw, fh);
+      } else {
+        // 贴图没加载出来也得有个东西砸下来，不能凭空出坑
+        ctx.fillStyle = '#d06028';
+        ctx.fillRect(e.x - 8, e.y - 8, 16, 16);
+      }
+      ctx.restore();
+    } else if (e.kind === 'crater') {
       const a = Math.min(1, e.t);
       ctx.fillStyle = `rgba(255,140,60,${a * 0.7})`;
       const r = Math.min(e.w || 90, (1.6 - e.t) * (e.w || 90) * 1.2);

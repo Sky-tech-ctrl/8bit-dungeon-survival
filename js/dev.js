@@ -172,22 +172,19 @@ const DevMode = (() => {
       v => { if (game.disaster && game.disaster.next) game.disaster.timer = Math.max(0, v); },
       { max: 999, extra: [['重排', () => { if (game.disaster) game.disaster.schedule(); }]] }));
 
-    add(buttonRow('地表', [
-      ['全部修复', () => { game.surface.fill(1); game.updateUI(); }],
-      ['全场侵蚀25%', () => {
-        for (let c = 0; c < BASEMENT_COLS; c++) game.damageSurface(c, 0.25);
-      }],
-      ['随机砸穿5列', () => {
-        for (let i = 0; i < 5; i++) game.breakSurface(Math.floor(Math.random() * BASEMENT_COLS));
+    add(buttonRow('地形', [
+      ['全部回填', () => { game.craterDepth.fill(0); game.updateUI(); }],
+      ['全场下沉半格', () => {
+        for (let c = 0; c < BASEMENT_COLS; c++) game.carveGround(c, TILE * 0.5);
       }],
     ]));
 
-    // 地表完整度是连续值了，光看「有没有洞」不够 —— 得能读出平均厚度，
-    // 才验证得了火山那种「全场同时变薄」的效果
-    add(numberField('地表完整度%',
-      () => Math.round(game.surface.reduce((a, b) => a + b, 0) / BASEMENT_COLS * 100),
-      v => { const t = Math.max(0, Math.min(1, v / 100)); game.surface.fill(t); game.updateUI(); },
-      { max: 100 }));
+    // 地形是高度场了，光看「有没有洞」不够 —— 得能读出平均挖掘深度，
+    // 才验证得了火山那种「全场同时下沉」的效果
+    add(numberField('平均坑深px',
+      () => Math.round(game.craterDepth.reduce((a, b) => a + b, 0) / BASEMENT_COLS),
+      v => { game.craterDepth.fill(Math.max(0, Math.min(CRATER_MAX, v))); game.updateUI(); },
+      { max: CRATER_MAX }));
 
     add(toggleField('强制显示预报',
       () => !!game.hasForecast,

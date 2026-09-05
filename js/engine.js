@@ -326,15 +326,13 @@ class Game {
     // 开发者模式的开关。刻意放在 reset 里一并清掉 —— 换局不该带着作弊状态
     this.dev = { god: false, doorGod: false, infiniteRes: false };
 
-    // 地表完整度：每列一个 0~1 的数值，1 = 完好，0 = 洞穿。
+    // 地形高度场：每列记录「被挖掉多少像素」，0 = 完好。
     //
-    // 这里刻意用连续值而不是布尔值：火山的「均匀侵蚀整个地表」用布尔量
-    // 根本表达不出来 —— 那是让整条地表一层层变薄，薄到零才破。
-    // 有了连续值，三种天灾的破坏形状才真正拉得开：
-    //   陨石 一个大坑（中心洞穿、边缘削薄）
-    //   地震 满地小坑（很多列各掉一点，反复几次才穿）
-    //   火山 全场等量侵蚀（每次喷发所有列同时变薄）
-    this.surface = new Array(BASEMENT_COLS).fill(1);
+    // 从「一层 0~1 的薄膜」升级成真正的高度场，是为了让坑成为**地形**
+    // 而不是贴花：现实里陨石砸出来的是一个有深度的碗形凹陷，中心最深、
+    // 向外逐渐变浅。每列各有自己的深度，碗形就自然从数组里浮现出来。
+    // 深度还能超过地表层继续往下挖，把地下室的房间直接掀掉。
+    this.craterDepth = new Array(BASEMENT_COLS).fill(0);
     this.hasForecast = false;          // 是否已建天气预报站
 
     // 灾害系统。主线前几关不开（见 beginCampaignLevel）
@@ -1378,44 +1376,52 @@ class Game {
   // ==================== 地形破坏 ====================
 
   /**
-   * 削薄某一列的地表。amount 为 0~1。
-   * 返回「这一下是否让它新破开了」—— 只有跨过 0 的那一刻才算破口，
-   * 后续再砸同一列不会重复触发提示和塌方伤害。
+   * 往下挖某一列，px 为像素深度。
+   * 返回「这一下是否让它新挖穿了地表层」—— 只有跨过 CRATER_BREACH 的那一刻
+   * 才算新破口，后续继续挖深不会重复触发提示。
+   *
+   * 挖到哪儿，哪儿的房间就没了：坑是实打实的地形破坏，不是贴在地面上的花纹。
    */
-  damageSurface(col, amount) {
-    if (col < 0 || col >= BASEMENT_COLS) return false;
-    const before = this.surface[col];
-    if (before <= 0) return false;
-    this.surface[col] = Math.max(0, before - amount);
-    const breached = this.surface[col] <= 0;
+  carveGround(col, px) {
+    if (col < 0 || col >= BASEMENT_COLS || px <= 0) return false;
+    const before = this.craterDepth[col];
+    if (before >= CRATER_MAX) return false;
+    const after = Math.min(CRATER_MAX, before + px);
+    this.craterDepth[col] = after;
+    const breached = before < CRATER_BREACH && after >= CRATER_BREACH;
 
-    this.spawnParticles(col * TILE + TILE / 2, GROUND_Y,
+    this.spawnParticles(col * TILE + TILE / 2, GROUND_Y - 4,
                         breached ? COL.dirt : COL.dirtDark, breached ? 8 : 3);
 
+    // 坑底以上的房间被整个掀掉。判据用「房间顶边被挖过 40% 以上」，
+    // 免得坑沿只蹭到一点点就把整间房判死。
+    const floor = after - 8;                      // 相对 GROUND_Y 的坑底深度
+    for (const r of this.rooms.slice()) {
+      if (col < r.col || col >= r.col + r.size.w) continue;
+      if (floor > r.row * TILE + TILE * 0.4) this.destroyRoom(r);
+    }
+
     if (breached) {
-      // 塌方砸到下面的房间：这是「地表破了」在地下的直接后果
       const room = this.exposedRoomAt(col);
-      if (room) this.damageRoom(room, 20);
-      // 只在本波第一次砸穿时提示一次，免得一场天灾刷十行同样的话
+      if (room) this.damageRoom(room, 20);        // 塌方砸伤下面幸存的房间
       if (!this._holeHintAt || Date.now() - this._holeHintAt > 8000) {
         this._holeHintAt = Date.now();
         const c = ROOM_TYPES.concrete.cost;
-        this.log(`地面被砸穿！点击缺口可用混凝土修补（${c.gold}◉）`, '#9cf');
+        this.log(`地面被砸出坑洞！点击坑口可用混凝土回填（${c.gold}◉）`, '#9cf');
       }
     }
     return breached;
   }
 
-  /** 直接砸穿一列（等价于削掉全部完整度）。 */
+  /** 直接挖穿一列（挖到刚好破口的深度）。 */
   breakSurface(col) {
-    return this.damageSurface(col, 1);
+    return this.carveGround(col, CRATER_BREACH - this.craterDepth[col]);
   }
 
-  /** 某一列的完整度，0~1。渲染要靠它决定地表画多厚。 */
-  surfaceIntegrity(col) {
-    if (col < 0 || col >= BASEMENT_COLS) return 1;
-    const v = this.surface[col];
-    return typeof v === 'number' ? v : (v ? 1 : 0);
+  /** 某一列被挖掉的深度（像素）。渲染靠它画出坑的剖面。 */
+  groundDepth(col) {
+    if (col < 0 || col >= BASEMENT_COLS) return 0;
+    return this.craterDepth[col] || 0;
   }
 
   /**
@@ -1428,7 +1434,11 @@ class Game {
    */
   patchHoleAt(col) {
     if (!this.isHole(col)) return false;
-    const cost = ROOM_TYPES.concrete.cost;
+    // 坑越深回填越贵：一个三格深的陨石坑不该和一道浅裂缝一个价
+    const mult = 1 + Math.floor(this.groundDepth(col) / TILE);
+    const base = ROOM_TYPES.concrete.cost;
+    const cost = {};
+    for (const [k, v] of Object.entries(base)) cost[k] = v * mult;
     if (!this.canAfford(cost)) {
       Sound.sfx('error');
       this.log('资源不足，无法修补地面', '#f55');
@@ -1437,6 +1447,7 @@ class Game {
     this.pay(cost);
     this.patchSurface(col);
     Sound.sfx('build');
+    this.log(`⬛ 第 ${col} 列已回填（${cost.gold}◉）`, '#9cf');
     this.spawnParticles(col * TILE + TILE / 2, GROUND_Y - 6, COL.stoneLight, 10);
     this.updateUI();
     return true;
@@ -1445,15 +1456,15 @@ class Game {
   /** 修补地表（混凝土块建成时调用）。 */
   patchSurface(col) {
     if (col < 0 || col >= BASEMENT_COLS) return false;
-    if (this.surface[col] >= 1) return false;
-    this.surface[col] = 1;
+    if (this.craterDepth[col] <= 0) return false;
+    this.craterDepth[col] = 0;
     this.log(`⬛ 第 ${col} 列地面已修补`, '#9cf');
     return true;
   }
 
   /** 某一列是否破口 —— 丧尸判断能不能从这里下去。 */
   isHole(col) {
-    return col >= 0 && col < BASEMENT_COLS && this.surfaceIntegrity(col) <= 0;
+    return col >= 0 && col < BASEMENT_COLS && this.groundDepth(col) >= CRATER_BREACH;
   }
 
   // ==================== 房间耐久 ====================
