@@ -10,7 +10,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='56'%3E🎮%3C/text%3E%3C/svg%3E" type="image/svg+xml">
 <title>8-BIT 地牢求生</title>
 <link rel="stylesheet" href="css/style.css?v=41">
-<link rel="stylesheet" href="css/title.css?v=2">
+<link rel="stylesheet" href="css/title.css?v=3">
 <style>
 /* ======== 登录/注册 & 存档 模态框 ======== */
 .modal-mask {position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;display:flex;align-items:center;justify-content:center}
@@ -188,6 +188,8 @@
         <!-- 诊断入口必须是鼠标可达的：用键盘快捷键去排查键盘故障，
              键一旦被浏览器或输入法吃掉，快捷键自己也打不开。 -->
         <button id="keyDebugBtn" style="background:#243046;color:#9fd">🔧 按键诊断</button>
+        <button id="bgmBtn" style="background:#2a3a2a;color:#9f9">🎵 音乐</button>
+        <button id="sfxBtn" style="background:#2a3a2a;color:#9f9">🔔 音效</button>
       </div>
     </div>
   </div>
@@ -264,14 +266,15 @@
 <div id="tsSpider"><div class="web"></div><img src="assets/title_spider.png?v=2" alt=""></div>
 
 <!-- 按依赖顺序加载脚本：cache_bust 最先执行，保证其余脚本加载前就已清掉旧缓存/SW/IDB -->
-<script src="js/cache_bust.js?v=51"></script>
-<script src="js/config.js?v=51"></script>
-<script src="js/users.js?v=51"></script>
-<script src="js/api.js?v=51"></script>
-<script src="js/assets.js?v=51"></script>
-<script src="js/engine.js?v=51"></script>
-<script src="js/render.js?v=51"></script>
-<script src="js/input.js?v=51"></script>
-<script src="js/title.js?v=51"></script>
-<script src="js/main.js?v=51"></script></body>
+<script src="js/cache_bust.js?v=54"></script>
+<script src="js/config.js?v=54"></script>
+<script src="js/audio.js?v=54"></script>
+<script src="js/users.js?v=54"></script>
+<script src="js/api.js?v=54"></script>
+<script src="js/assets.js?v=54"></script>
+<script src="js/engine.js?v=54"></script>
+<script src="js/render.js?v=54"></script>
+<script src="js/input.js?v=54"></script>
+<script src="js/title.js?v=54"></script>
+<script src="js/main.js?v=54"></script></body>
 </html>

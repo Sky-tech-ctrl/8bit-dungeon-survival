@@ -545,8 +545,8 @@ class Game {
       btn.innerHTML = `<div class="icon">${t.icon}</div><div>${t.name}</div><div class="cost">${costStr}</div>`;
       btn.title = t.desc;
       btn.onclick = () => {
-        if (!this.canAfford(t.cost)) { this.log('资源不足！', '#f55'); return; }
-        if (!spaceOk) { this.log('位置不足！', '#f55'); return; }
+        if (!this.canAfford(t.cost)) { Sound.sfx('error'); this.log('资源不足！', '#f55'); return; }
+        if (!spaceOk) { Sound.sfx('error'); this.log('位置不足！', '#f55'); return; }
         this.tryBuild(key, parseInt(btn.dataset.startCol), parseInt(btn.dataset.row));
         this.hideBuildPopup();
       };
@@ -606,18 +606,21 @@ class Game {
     const size = type.size;
     if (col<0||row<0||col+size.w>BASEMENT_COLS||row+size.h>BASEMENT_ROWS) return false;
     if (type.unique && this.rooms.some(r => r.type === typeKey)) {
+      Sound.sfx('error');
       this.log(`${type.name} 只能建造一个！`, '#f55');
       return false;
     }
     for (let dc=0;dc<size.w;dc++) for (let dr=0;dr<size.h;dr++) {
       if (this.grid[col+dc][row+dr] !== null) {
+        Sound.sfx('error');
         this.log('该位置已被占用！', '#f55');
         return false;
       }
     }
-    if (!this.canAfford(type.cost)) { this.log('资源不足！', '#f55'); return false; }
+    if (!this.canAfford(type.cost)) { Sound.sfx('error'); this.log('资源不足！', '#f55'); return false; }
     this.pay(type.cost);
     this.placeRoom(typeKey, col, row);
+    Sound.sfx('build');
     this.log(`✓ 建造了 ${type.name}`, '#8f8');
     this.updateBuildBtns();
     return true;
@@ -747,13 +750,14 @@ class Game {
     const nextLv = this.playerLevel + 1;
     if (nextLv > BLACKSMITH_UPGRADES.length) return;
     const nx = BLACKSMITH_UPGRADES[nextLv - 1];
-    if (!this.canAfford(nx.cost)) { this.log('资源不足，无法升级！', '#f55'); return; }
+    if (!this.canAfford(nx.cost)) { Sound.sfx('error'); this.log('资源不足，无法升级！', '#f55'); return; }
     this.pay(nx.cost);
     this.playerLevel = nextLv;
     this.player.maxHp = nx.hp;
     this.player.hp = nx.hp;
     this.player.atk = nx.atk;
     this.player.speed = nx.speed;
+    Sound.sfx('upgrade');
     this.log(`⚒ 升级成功！Lv.${nextLv} · ${nx.name}`, '#ff0');
     this.showBlacksmithDialog();
   }
@@ -797,6 +801,7 @@ class Game {
     this.lastTime = performance.now();
     this.updateUI();
     this.log('基地已启动！使用 WASD 或手机摇杆控制角色', '#8ff');
+    Sound.playBGM('battle');
     this.loop();
   }
 
@@ -816,6 +821,7 @@ class Game {
     if (!this.running || this.gameOver) return;
     const wantPaused = (typeof forceState === 'boolean') ? forceState : !this.paused;
     this.paused = wantPaused;
+    Sound.duck(wantPaused);
     const panel = document.getElementById('pausePanel');
     if (panel) panel.classList.toggle('hidden', !this.paused);
     if (!this.paused) {
@@ -902,6 +908,7 @@ class Game {
           z.attackCd = z.attackInterval;
           if (targetKind === 'door') {
             this.doorHp -= z.damage;
+            Sound.sfx('doorHit');
             this.shakeScreen();
             this.spawnParticles(DOOR_X, GROUND_Y - DOOR_HEIGHT/2, COL.red, 5);
             if (this.doorHp <= 0) { this.doorHp = 0; this.endGame(false); return; }
@@ -918,6 +925,7 @@ class Game {
       if (this.zombies[i].hp <= 0) {
         const z = this.zombies[i];
         this.spawnParticles(z.x, z.y, COL.zombie, 10);
+        Sound.sfx('zombieDie');
         this.kills++;
         const g = 2 + Math.floor(this.wave*0.5) + Math.floor(Math.random()*3);
         this.resources.gold = Math.min(this.capacity.gold, this.resources.gold + g);
@@ -1103,6 +1111,7 @@ class Game {
   }
 
   playerMeleeAttack() {
+    Sound.sfx('swing');
     const p = this.player;
     const range = p.atkRange;
     const hitX = p.x + p.facing * range * 0.7;
@@ -1126,11 +1135,13 @@ class Game {
         }
       }
     }
-    // 挥砍特效
+    // 挥砍特效。砍空只有挥剑的风声，砍中才补一记钝击 —— 打击感全在这个区别上
+    if (hit) Sound.sfx('hit');
     this.spawnParticles(hitX, hitY-10, hit?COL.gold:COL.stoneLight, hit?8:3);
   }
 
   damagePlayer(dmg) {
+    Sound.sfx('hurt');
     const p = this.player;
     p.hp -= dmg;
     p.hitFlash = 1;
@@ -1195,6 +1206,7 @@ class Game {
         this.resources[pile.type] = Math.min(this.capacity[pile.type], this.resources[pile.type] + pile.amount);
         this.spawnParticles(pile.x, pile.y, pile.type==='gold'?COL.gold:pile.type==='food'?COL.food:COL.power, 10);
         this.log(`✦ 拾取 ${pile.amount} ${this.resIcon(pile.type)}`, pile.type==='gold'?'#ff0':pile.type==='food'?'#8f8':'#8af');
+        Sound.sfx('pickup');
         this.resourcePiles.splice(i,1);
       }
     }
@@ -1204,6 +1216,7 @@ class Game {
   shakeScreen() { this.shakeT = 0.6; }
 
   startWave() {
+    Sound.sfx('waveStart');
     this.wave++;
     this.waveActive = true;
     this.waveZombieQueue = 5 + this.wave * 3 + Math.floor(this.wave*this.wave*0.3);
@@ -1228,6 +1241,7 @@ class Game {
   }
 
   endWave() {
+    Sound.sfx('waveClear');
     this.waveActive = false;
     this.nextWaveTimer = 20 + this.wave * 2;
     const bonus = 20 + this.wave * 10;
@@ -1313,6 +1327,7 @@ class Game {
   endGame(win) {
     this.gameOver = true;
     this.running = false;
+    Sound.playBGM('gameover');
     const ov = document.getElementById('overlay');
     ov.innerHTML = '';
     if (!win) {
@@ -1470,6 +1485,7 @@ class Game {
     if (name === null) return;
     const r = await AuthAPI.save(slot, this.exportSnapshot(), name);
     if (r.ok) {
+      Sound.sfx('save');
       alert('✓ ' + r.msg);
       this._autoSaveSlot = slot;
     } else {

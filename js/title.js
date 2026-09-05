@@ -33,6 +33,7 @@ const TitleScreen = (() => {
       z.classList.remove('idle');
       setTimeout(() => z.classList.add('idle'), 600);
     }
+    Sound.playBGM('title');
     refreshStatus();
   }
 
@@ -55,12 +56,22 @@ const TitleScreen = (() => {
       ' · <a id="tsCfgBackend">设置</a></div>' +
       '<div>' + (who
         ? '当前账号：<span class="who">' + escapeHTML(who) + '</span> · <a id="tsLogout">退出登录</a>'
-        : '尚未登录 · 开始游戏时会提示登录') + '</div>';
+        : '尚未登录 · 开始游戏时会提示登录') + '</div>' +
+      '<div><a id="tsBgm">' + (Sound.bgmOn ? '🎵 音乐 开' : '🔇 音乐 关') + '</a>' +
+      ' · <a id="tsSfx">' + (Sound.sfxOn ? '🔔 音效 开' : '🔕 音效 关') + '</a></div>';
 
     const cfg = document.getElementById('tsCfgBackend');
     if (cfg) cfg.onclick = configureBackend;
     const lo = document.getElementById('tsLogout');
     if (lo) lo.onclick = async () => { await AuthAPI.logout(); refreshStatus(); };
+    const bg = document.getElementById('tsBgm');
+    if (bg) bg.onclick = () => { Sound.setBGM(!Sound.bgmOn); refreshStatus(); };
+    const sf = document.getElementById('tsSfx');
+    if (sf) sf.onclick = () => {
+      Sound.setSFX(!Sound.sfxOn);
+      if (Sound.sfxOn) Sound.sfx('click');     // 打开时响一声，确认生效
+      refreshStatus();
+    };
   }
 
   function escapeHTML(s) {
@@ -171,6 +182,7 @@ const TitleScreen = (() => {
     if (!sp || sp.classList.contains('show')) return;   // 正在挂着就不重复触发
 
     if (fl) { fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go'); }
+    Sound.sfx('upgrade');       // 彩蛋值得一段有仪式感的音
 
     // 落点按画面实际位置算。蜘蛛侠是 position:fixed 挂在 body 上的
     //（这样才能压过所有面板），但如果只让它停在视口顶端，
@@ -214,6 +226,7 @@ const TitleScreen = (() => {
 
     document.querySelectorAll('.ts-opt').forEach(btn => {
       btn.addEventListener('click', () => {
+        Sound.sfx('click');
         const act = btn.dataset.act;
         if (act === 'new') onNewGame();
         else if (act === 'load') onLoadGame();
@@ -222,7 +235,7 @@ const TitleScreen = (() => {
     });
 
     const pad = document.getElementById('tsNotepad');
-    if (pad) pad.addEventListener('click', openNotes);
+    if (pad) pad.addEventListener('click', () => { Sound.sfx('click'); openNotes(); });
 
     // ---- 心得面板 ----
     const area = document.getElementById('notesArea');

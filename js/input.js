@@ -58,6 +58,17 @@ Game.prototype.applyDeviceMode = function() {
 };
 
 // ---- 电脑端自适应缩放（保持4:3比例居中） ----
+// ---- 标题界面缩放 ----
+// 标题界面是按 960×720 设计稿布局的，这里把它整体缩放到容器实际大小。
+// 图片能靠百分比自适应，但固定 px 的字号不能 —— 必须整体 transform。
+Game.prototype.syncTitleScale = function() {
+  const ts = document.getElementById('titleScreen');
+  const gc = document.getElementById('gameContainer');
+  if (!ts || !gc) return;
+  const w = gc.clientWidth;
+  if (w > 0) ts.style.setProperty('--ts-scale', (w / W).toFixed(5));
+};
+
 Game.prototype.applyPCLayout = function() {
   const vW = window.innerWidth;
   const vH = window.innerHeight;
@@ -80,6 +91,7 @@ Game.prototype.applyPCLayout = function() {
   container.style.width = (cssW + bw) + 'px';
   container.style.height = (cssH + bw) + 'px';
   this._pc = { vW, vH, scale: finalScale, cssW, cssH };
+  this.syncTitleScale();
 };
 
 // ---- 手机端视觉横屏布局（尺寸与旋转由 CSS 控制，避免 JS 与 CSS 冲突） ----
@@ -106,6 +118,7 @@ Game.prototype.applyMobileLayout = function() {
     right: rect.right,
     bottom: rect.bottom
   };
+  this.syncTitleScale();
 };
 
 // ---- 屏幕坐标 → 游戏逻辑坐标（处理手机旋转逆变换） ----
@@ -354,6 +367,32 @@ Game.prototype.setupInput = function() {
     // 所以点完可以直接继续游戏，一边玩一边看
     this.toggleKeyDebug();
   });
+
+  // 音频开关（暂停面板）
+  const bgmBtn = document.getElementById('bgmBtn');
+  const sfxBtn = document.getElementById('sfxBtn');
+  const syncAudioBtns = () => {
+    if (bgmBtn) {
+      bgmBtn.textContent = Sound.bgmOn ? '🎵 音乐' : '🔇 音乐';
+      bgmBtn.style.opacity = Sound.bgmOn ? '1' : '.5';
+    }
+    if (sfxBtn) {
+      sfxBtn.textContent = Sound.sfxOn ? '🔔 音效' : '🔕 音效';
+      sfxBtn.style.opacity = Sound.sfxOn ? '1' : '.5';
+    }
+  };
+  if (bgmBtn) bgmBtn.addEventListener('click', (e) => {
+    e.preventDefault(); bgmBtn.blur();
+    Sound.setBGM(!Sound.bgmOn);
+    syncAudioBtns();
+  });
+  if (sfxBtn) sfxBtn.addEventListener('click', (e) => {
+    e.preventDefault(); sfxBtn.blur();
+    Sound.setSFX(!Sound.sfxOn);
+    syncAudioBtns();
+    if (Sound.sfxOn) Sound.sfx('click');     // 打开时立刻响一声，确认生效
+  });
+  syncAudioBtns();
 
   if (quitBtn) quitBtn.addEventListener('click', (e) => {
     e.preventDefault();

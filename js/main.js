@@ -11,7 +11,7 @@ function fitStage() {
   if (!window.game || !game.applyPCLayout) return;
   // 手机端是另一套（旋转 + 100dvw/100dvh），由 applyMobileLayout 全权负责
   if (document.body.classList.contains('mobile-mode')) return;
-  game.applyPCLayout();
+  game.applyPCLayout();      // 内部会顺带同步标题界面的缩放比
 }
 
 // ---- 双击缩放兜底 ----
@@ -46,6 +46,22 @@ function guardDoubleTapZoom() {
   }, { passive: false });
 }
 
+
+// ---- 音频解锁 ----
+// 浏览器的自动播放策略：AudioContext 在用户产生交互之前一直是 suspended，
+// 不 resume 就一声不响。所以在第一次点击/触摸/按键时解锁一次。
+// 解锁前请求过的 BGM 会被 audio.js 记下来，解锁瞬间补上，
+// 玩家不会察觉到这层延迟。
+function unlockAudioOnFirstGesture() {
+  const go = () => {
+    Sound.unlock();
+    ['pointerdown', 'keydown', 'touchend'].forEach(ev =>
+      window.removeEventListener(ev, go, true));
+  };
+  ['pointerdown', 'keydown', 'touchend'].forEach(ev =>
+    window.addEventListener(ev, go, true));
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   // 顺序要紧：Game 的构造函数会跑 setupAuth()，把 _showAuth / _showSave
   // 暴露出来，标题界面要用它们，所以必须先建 Game 再 init 标题界面。
@@ -53,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.TitleScreen) TitleScreen.init(game);
 
   guardDoubleTapZoom();
+  unlockAudioOnFirstGesture();
 
   // 标题界面阶段也要铺满窗口。游戏开始后 applyDeviceMode() 会自己再注册
   // 一次 resize → applyPCLayout，重复调用是幂等的，不会互相干扰。

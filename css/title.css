@@ -13,7 +13,17 @@
 
 #titleScreen {
   position: absolute;
-  inset: 0;
+  /* 标题界面按固定的 960×720 设计稿布局，再整体缩放到容器大小。
+     不能只靠 inset:0 跟着容器走 —— 那样图片会缩放，但 LOGO 副标题、
+     石碑上的选项这些**固定 px 字号的文字不会**，容器一小，
+     「开始新游戏」就被挤成两行。整体 transform 才能让图文同步缩放。
+     --ts-scale 由 syncTitleScale() 按容器实测宽度写入。*/
+  top: 0;
+  left: 0;
+  width: 960px;
+  height: 720px;
+  transform-origin: top left;
+  transform: scale(var(--ts-scale, 1));
   overflow: hidden;
   z-index: 500;
   font-family: 'Courier New', monospace;
