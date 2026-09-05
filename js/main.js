@@ -33,11 +33,46 @@ function fitGameContainer() {
   gc.style.margin = '0 ' + (-(w * (1 - s)) / 2) + 'px ' + (-(h * (1 - s))) + 'px';
 }
 
+
+// ---- 双击缩放兜底 ----
+// 正规做法是 CSS 的 touch-action: manipulation（见 style.css），
+// 现代浏览器到此为止就够了。但 iOS Safari 有两个已知脾气：
+//   · 12 以前的版本对 touch-action 支持不全
+//   · 即便支持，靠近屏幕边缘的双击有时仍会被系统解释成缩放
+// 所以再加一道纯 JS 的兜底：两次触摸结束间隔 < 300ms 且落点相距很近时，
+// 把第二次的默认行为吃掉 —— 浏览器就没机会把它凑成一次「双击」。
+//
+// 只吃第二次，第一次永远原样放行，所以正常的点击不受影响；
+// 输入框和文本域整个跳过，免得干扰选词、光标定位这些原生手势。
+function guardDoubleTapZoom() {
+  let lastTime = 0, lastX = 0, lastY = 0;
+  document.addEventListener('touchend', (e) => {
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+
+    const touch = e.changedTouches && e.changedTouches[0];
+    if (!touch) return;
+    const now = e.timeStamp || Date.now();
+    const near = Math.abs(touch.clientX - lastX) < 40 && Math.abs(touch.clientY - lastY) < 40;
+
+    if (now - lastTime < 300 && near) {
+      if (e.cancelable) e.preventDefault();
+      lastTime = 0;              // 归零：三连击时第三下要当成新的第一下，别被连锁吞掉
+      return;
+    }
+    lastTime = now;
+    lastX = touch.clientX;
+    lastY = touch.clientY;
+  }, { passive: false });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   // 顺序要紧：Game 的构造函数会跑 setupAuth()，把 _showAuth / _showSave
   // 暴露出来，标题界面要用它们，所以必须先建 Game 再 init 标题界面。
   game = new Game();
   if (window.TitleScreen) TitleScreen.init(game);
+
+  guardDoubleTapZoom();
 
   fitGameContainer();
   window.addEventListener('resize', fitGameContainer);

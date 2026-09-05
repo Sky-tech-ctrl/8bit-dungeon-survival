@@ -12,6 +12,49 @@ body {
   image-rendering: crisp-edges;
 }
 
+/* ==================== 触摸行为（手机端）==================== */
+/* 双击缩放对这个游戏是纯干扰：连点攻击键、快速点两下地下室格子建造、
+   在石碑选项上手抖点了两下 —— 浏览器都会当成「双击缩放」，画面直接放大。
+
+   touch-action: manipulation 正是为此而生：它只禁掉双击缩放（以及随之
+   而来的 300ms 点击延迟），双指缩放依然保留 —— 想凑近看清的人不受影响。
+
+   touch-action 不是继承属性，但浏览器会把元素及其祖先的值取交集，
+   所以写在 body 上就能覆盖整个页面。 */
+body {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;   /* 顺手去掉点击时那层灰色闪烁 */
+}
+
+/* 手机横屏时系统可能按「字体自动放大」重排文字，会把 HUD 顶歪 */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* 游戏画面：所有触摸都由游戏自己解释（移动、建造、攻击），
+   浏览器的平移/缩放手势一律不要插手 */
+canvas,
+#titleScreen,
+#tsZombie,
+#tsNotepad {
+  touch-action: none;
+}
+
+/* 建造菜单是要能上下滚的，所以只放行竖向平移，别写成 none */
+#buildMenu,
+.tut-list,
+.save-grid {
+  touch-action: pan-y;
+}
+
+/* 文本框要保留原生的选择/滚动手势 */
+#notesArea,
+input,
+textarea {
+  touch-action: auto;
+}
+
 /* ==================== 游戏容器 ==================== */
 #gameContainer {
   position: relative;
