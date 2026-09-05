@@ -265,7 +265,18 @@ const Sound = (() => {
       ],
     },
 
-    // 战斗：同样是 A 小调，但速度快一倍，低音改成推进的八分音符，加鼓
+    // 战斗：同样是 A 小调，但速度快一倍，低音改成推进的八分音符。
+    //
+    // 鼓不是一直响的 —— 它按战况分层进入（minLevel），这是自适应音乐的标准做法：
+    // 曲子本身不变，只是随着局势升温把声部一层层叠上去。比「战斗一开始就
+    // 全套鼓点」有层次得多，玩家能从听觉上感到压力在累积。
+    //   0 平静：只有贝斯与主旋律（波次间隙）
+    //   1 交战：底鼓 + 基础踩镲
+    //   2 激烈：加军鼓 backbeat + 副旋律
+    //   3 危急：踩镲填满 + 每四小节一次加花（门快破 / 血量见底）
+    //
+    // 一格 = 八分音符，8 格 = 一小节 4/4。层的进出只在小节线上发生（见调度器），
+    // 半路插进来会明显「脱拍」。
     battle: {
       bpm: 132,
       parts: [
@@ -275,12 +286,21 @@ const Sound = (() => {
         { type: 'square', vol: 0.085, seq:
           'A4 .  C5 .  E5 C5 A4 .  .  A4 C5 .  E5 .  D5 C5 ' +
           'F4 .  A4 .  C5 A4 F4 .  G4 .  B4 .  D5 B4 G4 .  ' },
-        { type: 'square', vol: 0.05, seq:
+        { type: 'square', vol: 0.05, minLevel: 2, seq:
           'E5 .  .  .  .  .  .  .  A5 .  .  .  .  .  G5 .  ' +
           'C5 .  .  .  .  .  .  .  B4 .  .  .  .  .  D5 .  ' },
-        { drum: true, vol: 0.13, seq:
-          'k  .  h  .  k  h  .  h  k  .  h  .  s  .  h  h  ' +
-          'k  .  h  .  k  h  .  h  k  .  h  .  s  .  h  h  ' },
+        // ---- 鼓：第一层，底鼓打骨架 ----
+        { drum: true, vol: 0.14, minLevel: 1, seq:
+          'k  .  h  .  k  h  h  .  k  .  h  .  k  h  h  .  ' +
+          'k  .  h  .  k  h  h  .  k  .  h  .  k  h  h  k  ' },
+        // ---- 第二层：军鼓 backbeat，一下子就有了「在打仗」的感觉 ----
+        { drum: true, vol: 0.13, minLevel: 2, seq:
+          '.  .  s  .  .  .  s  .  .  .  s  .  .  .  s  .  ' +
+          '.  .  s  .  .  .  s  .  .  .  s  .  .  .  s  .  ' },
+        // ---- 第三层：踩镲填满 + 末尾加花，只在危急时出现 ----
+        { drum: true, vol: 0.085, minLevel: 3, seq:
+          'h  h  h  h  h  h  h  h  h  h  h  h  h  h  h  h  ' +
+          'h  h  h  h  h  h  h  h  s  s  h  s  k  s  s  k  ' },
       ],
     },
 
@@ -297,6 +317,8 @@ const Sound = (() => {
 
   let currentName = null;
   let schedTimer = null;
+  let intensity = 0;          // 当前实际生效的层级
+  let pendingIntensity = 0;   // 游戏侧刚报上来的层级，等小节线才生效
   let stepIndex = 0;
   let nextTime = 0;
   let pendingTrack = null;         // 解锁之前请求的曲子
@@ -333,7 +355,12 @@ const Sound = (() => {
         if (track.loop === false) { stopBGM(); return; }
         stepIndex = 0;
       }
+      // 层的切换只在小节线（每 8 个八分音符）上发生。
+      // 半路加鼓会明显脱拍，等到小节线再换，听上去才像是「谱子本来就这么写的」。
+      if (stepIndex % 8 === 0) intensity = pendingIntensity;
+
       for (const part of track.parts) {
+        if (part.minLevel != null && intensity < part.minLevel) continue;
         const tok = part.seq.trim().split(/\s+/)[stepIndex];
         if (!tok || tok === '.' || tok === '-') continue;
         if (part.drum) {
@@ -363,6 +390,7 @@ const Sound = (() => {
     if (!c) return;
     currentName = name;
     stepIndex = 0;
+    intensity = pendingIntensity;      // 换曲时直接对齐，不必等小节线
     nextTime = c.currentTime + 0.06;
     schedTimer = setInterval(scheduler, TICK);
     scheduler();
@@ -410,8 +438,19 @@ const Sound = (() => {
     }
   });
 
+  /**
+   * 报告战况强度，0~3。由游戏侧每帧调用，只在变化时才有实际动作。
+   * 实际生效要等到下一个小节线 —— 见调度器里的注释。
+   */
+  function setIntensity(level) {
+    const v = Math.max(0, Math.min(3, level | 0));
+    if (v === pendingIntensity) return;
+    pendingIntensity = v;
+  }
+
   return {
-    unlock, sfx, playBGM, stopBGM, duck,
+    unlock, sfx, playBGM, stopBGM, duck, setIntensity,
+    get intensity() { return intensity; },
     setBGM, setSFX, setVolume,
     get bgmOn() { return prefs.bgm; },
     get sfxOn() { return prefs.sfx; },

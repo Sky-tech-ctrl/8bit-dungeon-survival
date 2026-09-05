@@ -833,9 +833,47 @@ class Game {
     }
   }
 
+  // ---- 战况强度：驱动音乐的鼓组分层 ----
+  // 结果是 0~3，交给 Sound.setIntensity()，音频侧只在小节线上换层。
+  // 刻意用「迟滞」而不是单一阈值：场上丧尸数会在临界点反复抖动，
+  // 直接比大小的话鼓会一小节进一小节出，非常烦人。
+  // 升级要够狠才升，降级要够静才降，中间留一段谁也不碰的缓冲带。
+  updateMusicIntensity() {
+    if (!this.running || this.gameOver) { Sound.setIntensity(0); return; }
+
+    const zombies = this.zombies.length;
+    const doorRatio = this.doorHp / (this.doorMaxHp || 100);
+    const hpRatio = this.player.maxHp ? this.player.hp / this.player.maxHp : 1;
+
+    // 危险度：丧尸越多越危险；门和血见底时额外加权 —— 哪怕场上只剩一只，
+    // 门只剩一丝血的时候也该是最紧张的音乐
+    let score = zombies;
+    if (doorRatio < 0.5) score += 3;
+    if (doorRatio < 0.25) score += 4;
+    if (hpRatio < 0.3) score += 2;
+    // 一波正在进行时保底 1 分：丧尸是分批刷出来的，两批之间场上会短暂
+    // 清零，若不保底，鼓会在波次中途莫名其妙断一小节再进来。
+    if (this.waveActive && score < 1) score = 1;
+
+    // 迟滞：升级门槛 UP 高于降级门槛 DOWN，两者之间是谁也不碰的缓冲带。
+    // 比如已经在第 2 级时，分数要掉到 4 以下才会降回第 1 级，
+    // 而不是一跌破 6 就走 —— 否则丧尸数在临界点抖两下，鼓就一进一出。
+    const UP = [0, 1, 6, 11];     // 升到第 n 级所需的分数
+    // DOWN[1] 必须是 1 而不是 0：判断写的是 score < DOWN[next]，
+    // 填 0 的话 0 < 0 永远不成立，丧尸清光后鼓会一直赖着不走。
+    const DOWN = [0, 1, 4, 9];    // 低于此分数才从第 n 级掉下来
+    let next = this._musicLevel || 0;
+    while (next < 3 && score >= UP[next + 1]) next++;
+    while (next > 0 && score < DOWN[next]) next--;
+
+    this._musicLevel = next;
+    Sound.setIntensity(next);
+  }
+
   // ==================== 更新逻辑 ====================
   update(dt) {
     if (this.gameOver) return;
+    this.updateMusicIntensity();
 
     // 云移动
     for (const c of this.clouds) {
