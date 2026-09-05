@@ -9,22 +9,21 @@ Game.prototype.render = function() {
     const s = this.shakeT * 8;
     ctx.translate((Math.random()-0.5)*s, (Math.random()-0.5)*s);
   }
+  // 顺序很要紧：地形要全部画完，实体才能画上去。
+  // 原来丧尸画在 drawBasement 之前 —— 那时地下室还没铺，
+  // 等它整块重填下来，掉进坑里的丧尸就被盖得一干二净，人在坑里却看不见。
   this.drawSky(ctx);
   this.drawGround(ctx);
   this.drawSurfaceHoles(ctx);
   this.drawDoor(ctx);
+  this.drawBasement(ctx);
+  this.drawHoleShafts(ctx);       // 把坑挖空，露出背景
 
-  // 野生资源堆（在丧尸前）
+  // 实体：一律画在地形之上，所以坑里的东西看得见
   for (const pile of this.resourcePiles) this.drawResourcePile(ctx, pile);
-
-  // 士兵、丧尸、子弹
   for (const s of this.soldiers) this.drawSoldier(ctx, s);
   for (const z of this.zombies) this.drawZombie(ctx, z);
   for (const p of this.projectiles) this.drawProjectile(ctx, p);
-
-  // 地下室
-  this.drawBasement(ctx);
-  this.drawHoleShafts(ctx);
   this.drawBuildPreview(ctx);
 
   // 玩家（最上层，除了粒子）
@@ -82,14 +81,32 @@ Game.prototype.drawHoleShafts = function(ctx) {
     const x = c * TILE;
     const floor = GROUND_Y - 8 + d;             // 坑底
 
-    // 纯粹的空腔：越深越暗，制造纵深。
-    // 不画坑壁、碎石、坑底堆土 —— 挖空的地方就该是空的。
-    for (let y = GROUND_Y; y < floor; y++) {
-      const t = (y - GROUND_Y) / Math.max(1, floor - GROUND_Y);
-      ctx.fillStyle = `rgba(0,0,0,${(0.55 + t * 0.35).toFixed(3)})`;
-      ctx.fillRect(x, y, TILE, 1);
-    }
+    // 挖空的地方直接露出背景图，不再盖一层渐变阴影。
+    // 阴影会让坑看着像「蒙了块黑布的地面」，而不是真的没有东西。
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, GROUND_Y, TILE, floor - GROUND_Y);
+    ctx.clip();
+    this.drawBackdrop(ctx);
+    ctx.restore();
   }
+};
+
+// ---- 背景图 ----
+// 天空区域和坑腔共用同一张底图，只是各自铺的范围不同：
+// 天空铺 0~GROUND_Y，坑腔按整张画布铺，这样从洞里看出去才是连着的景。
+Game.prototype.drawBackdrop = function(ctx) {
+  const hillsTex = this.assets.get('hills_bg');
+  if (hillsTex) {
+    ctx.imageSmoothingEnabled = false;
+    try { ctx.drawImage(hillsTex, 0, 0, W, H); return; } catch (e) {}
+  }
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#5a8fc9');
+  grad.addColorStop(0.6, COL.sky1);
+  grad.addColorStop(1, '#b5daf0');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
 };
 
 // ---- 天空 ----
