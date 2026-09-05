@@ -16,6 +16,7 @@
    assets/title_notepad.png   左侧探出的记事本（点击开启「游戏心得」）
    assets/title_spider.png    彩蛋：倒挂的蜘蛛侠（Q 版圆头）
    assets/meteor.png          坠落中的陨石（3 帧，游戏内天灾用）
+   assets/world_bg.png        整张世界背景（天空 + 地层剖面，960×720）
 
  运行：python make_title_art.py
 ========================================================================
@@ -967,6 +968,119 @@ def make_meteor():
 
 
 # ======================================================================
+# ⑦ 整张世界背景图（游戏内）
+# ======================================================================
+def make_world_bg():
+    """
+    整张世界背景图（960×720，正好铺满画布）。
+
+    原先天空和坑腔各自拉伸同一张 hills_bg：天空按 6.67:1、坑腔按 1.33:1，
+    同一张图两种形变，从坑里看出去和地面上的景完全接不上。
+    现在改成一张按画布尺寸设计的整图，两处用同一个铺法，缝就自然消失了。
+
+    上下两段各有各的用途：
+      y 0~144    地表以上：天空 + 远山，玩家一直看得见
+      y 144~720  地表以下：地层剖面，只有天灾砸出坑洞时才会露出来
+    所以下半段不能画成「地下的天空」，得是越深越暗的土石层，
+    透过坑看进去才像是在看地底，而不是看穿了一个洞。
+    """
+    W_, H_, SCALE = 240, 180, 4
+    SKY_H = 36                        # 144 / 4，与游戏里的 GROUND_Y 对齐
+    img, d = canvas(W_, H_)
+    rnd = random.Random(20260905)
+
+    # ================= 天空 =================
+    vgrad(d, 0, 0, W_, SKY_H, (108, 178, 222), (196, 232, 246), bands=10)
+
+    # 远山：三层，越远越淡越高，制造纵深
+    def ridge(base_y, amp, col, seed, step):
+        rr = random.Random(seed)
+        pts, x, yv = [], -4, base_y
+        while x < W_ + 8:
+            pts.append((x, yv))
+            yv = base_y - rr.randrange(0, amp)
+            x += step
+        for i in range(len(pts) - 1):
+            x0, y0 = pts[i]
+            x1, y1 = pts[i + 1]
+            for xx in range(x0, x1):
+                if not (0 <= xx < W_):
+                    continue
+                t = (xx - x0) / max(1, x1 - x0)
+                yy = int(y0 + (y1 - y0) * t)
+                rect(d, xx, yy, 1, base_y - yy + 20, col)
+
+    ridge(SKY_H - 10, 9, (150, 196, 190), 3, 11)      # 最远，偏灰绿
+    ridge(SKY_H - 6, 7, (108, 172, 132), 7, 8)
+    ridge(SKY_H - 2, 5, (74, 140, 92), 11, 6)         # 最近，偏实
+
+    # 山坡上的小树点缀
+    for _ in range(26):
+        tx = rnd.randrange(W_)
+        ty = SKY_H - 4 - rnd.randrange(0, 5)
+        rect(d, tx, ty, 1, 3, (44, 96, 62))
+        rect(d, tx - 1, ty - 2, 3, 2, (56, 116, 74))
+
+    # ================= 地层剖面 =================
+    # 一层层不同色调的土石，越深越暗；这是透过坑洞看进去时的景
+    strata = [
+        (SKY_H, 14, (122, 82, 44)),        # 表层壤土
+        (SKY_H + 14, 18, (104, 68, 36)),
+        (SKY_H + 32, 22, (88, 58, 32)),
+        (SKY_H + 54, 26, (72, 48, 28)),
+        (SKY_H + 80, 30, (58, 40, 24)),
+        (SKY_H + 110, 34, (44, 30, 20)),   # 深处
+    ]
+    for (y0, h, c) in strata:
+        rect(d, 0, y0, W_, h, c)
+        # 层与层之间压一条稍暗的界线，剖面才有「分层」的读感
+        rect(d, 0, y0, W_, 1, tuple(max(0, v - 14) for v in c))
+    # 补到底
+    rect(d, 0, SKY_H + 144, W_, H_ - SKY_H - 144, (34, 24, 16))
+
+    # 颗粒噪点：每层都撒一点，避免大色块显得像塑料
+    for _ in range(2600):
+        gx = rnd.randrange(W_)
+        gy = rnd.randrange(SKY_H, H_)
+        base = 1 - (gy - SKY_H) / (H_ - SKY_H)
+        v = int(18 * base) + 6
+        px(d, gx, gy, (v + 30, v + 18, v + 8) if rnd.random() < 0.6 else (v + 8, v + 5, v + 2))
+
+    # 嵌在土里的石块，越深越多越大
+    for _ in range(120):
+        sx = rnd.randrange(2, W_ - 6)
+        sy = rnd.randrange(SKY_H + 4, H_ - 4)
+        deep = (sy - SKY_H) / (H_ - SKY_H)
+        sw = 2 + int(rnd.random() * (2 + deep * 4))
+        sh = max(1, sw - 1)
+        base = (96, 92, 88) if rnd.random() < 0.55 else (76, 66, 60)
+        shade = tuple(int(v * (1 - deep * 0.45)) for v in base)
+        rect(d, sx, sy, sw, sh, shade)
+        rect(d, sx, sy, sw, 1, tuple(min(255, v + 22) for v in shade))
+
+    # 表层往下扎的根须 —— 只在最上面两层，交代「这是地表底下」
+    for _ in range(40):
+        rx = rnd.randrange(W_)
+        ln = 4 + rnd.randrange(10)
+        for k in range(ln):
+            px(d, rx + (0 if k % 3 else (1 if rnd.random() < 0.5 else -1)),
+               SKY_H + k, (62, 46, 24))
+
+    # 深处的矿脉：几条斜向的浅色条带，给深层一点看头
+    for _ in range(7):
+        vx = rnd.randrange(W_)
+        vy = rnd.randrange(SKY_H + 60, H_ - 20)
+        for k in range(rnd.randrange(8, 22)):
+            rect(d, vx + k, vy + k // 2, 2, 2, (120, 104, 72))
+            px(d, vx + k, vy + k // 2, (156, 138, 96))
+
+    out = upscale(img, SCALE)
+    out.save(os.path.join(OUT, 'world_bg.png'))
+    print('  world_bg.png       ', out.size, '（天空 0~{}px，地层 {}~{}px）'
+          .format(SKY_H * SCALE, SKY_H * SCALE, H_ * SCALE))
+
+
+# ======================================================================
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
     print('生成标题界面美术资源 ...')
@@ -976,4 +1090,5 @@ if __name__ == '__main__':
     make_notepad()
     make_spider()
     make_meteor()
+    make_world_bg()
     print('完成。')

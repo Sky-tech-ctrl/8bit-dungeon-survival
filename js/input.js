@@ -295,9 +295,11 @@ Game.prototype.setupInput = function() {
       // 点击地下室格子 → 弹出建造菜单或房间功能面板
       this.showBuildPopup(col, row);
     } else {
-      // 点击地表：踩到天灾砸出的缺口就直接修补，否则只是关掉建造菜单
+      // 点击地表：只要这一列被挖过就放一块混凝土，否则只是关掉建造菜单。
+      // 判据用 groundDepth>0 而不是 isHole —— 浅层被削掉一点也该能补，
+      // 不必等它彻底塌穿。
       const col = Math.floor(mx / TILE);
-      if (this.isHole(col)) {
+      if (this.groundDepth(col) > 0) {
         this.patchHoleAt(col);
       } else {
         this.hideBuildPopup();

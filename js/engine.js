@@ -1491,22 +1491,27 @@ class Game {
    * 不该跟地下室的格子抢位置。
    */
   patchHoleAt(col) {
-    if (!this.isHole(col)) return false;
-    // 坑越深回填越贵：一个三格深的陨石坑不该和一道浅裂缝一个价
-    const mult = 1 + Math.floor(this.groundDepth(col) / TILE);
-    const base = ROOM_TYPES.concrete.cost;
-    const cost = {};
-    for (const [k, v] of Object.entries(base)) cost[k] = v * mult;
+    if (this.groundDepth(col) <= 0) return false;
+    const cost = ROOM_TYPES.concrete.cost;      // 每块一个固定价
     if (!this.canAfford(cost)) {
       Sound.sfx('error');
-      this.log('资源不足，无法修补地面', '#f55');
+      this.log('资源不足，无法放置混凝土块', '#f55');
       return false;
     }
     this.pay(cost);
-    this.patchSurface(col);
+
+    // 一次只填一格，和丧尸垫方块正好对称：它们一格一格往上垒，
+    // 你也一格一格往回填。整列一键填平会让深坑失去代价，
+    // 三格深的陨石坑和一道浅裂缝就没区别了。
+    const before = this.groundDepth(col);
+    this.craterDepth[col] = Math.max(0, before - TILE);
+    const left = this.groundDepth(col);
+
     Sound.sfx('build');
-    this.log(`⬛ 第 ${col} 列已回填（${cost.gold}◉）`, '#9cf');
-    this.spawnParticles(col * TILE + TILE / 2, GROUND_Y - 6, COL.stoneLight, 10);
+    this.spawnParticles(col * TILE + TILE / 2, GROUND_Y - 8 + left, COL.stoneLight, 8);
+    this.log(left > 0
+      ? `⬛ 放置混凝土块（${cost.gold}◉）—— 第 ${col} 列还差 ${Math.ceil(left / TILE)} 块`
+      : `⬛ 第 ${col} 列已填平`, '#9cf');
     this.updateUI();
     return true;
   }

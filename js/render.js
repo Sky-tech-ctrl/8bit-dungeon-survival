@@ -92,47 +92,37 @@ Game.prototype.drawHoleShafts = function(ctx) {
   }
 };
 
-// ---- 背景图 ----
-// 天空区域和坑腔共用同一张底图，只是各自铺的范围不同：
-// 天空铺 0~GROUND_Y，坑腔按整张画布铺，这样从洞里看出去才是连着的景。
+// ---- 世界背景图 ----
+// 一张按 960×720 画布设计的整图：上方 144px 是天空与远山，往下是地层剖面。
+// 天空区域和坑腔用**同一个铺法**（0,0,W,H），所以从坑里看出去和地面上的景
+// 是连着的。之前是同一张 hills_bg 被拉成两种比例（天空 6.67:1、坑腔 1.33:1），
+// 两边怎么都对不上。
 Game.prototype.drawBackdrop = function(ctx) {
-  const hillsTex = this.assets.get('hills_bg');
-  if (hillsTex) {
+  const tex = this.assets.get('world_bg') || this.assets.get('hills_bg');
+  if (tex) {
     ctx.imageSmoothingEnabled = false;
-    try { ctx.drawImage(hillsTex, 0, 0, W, H); return; } catch (e) {}
+    try { ctx.drawImage(tex, 0, 0, W, H); return; } catch (e) {}
   }
   const grad = ctx.createLinearGradient(0, 0, 0, H);
   grad.addColorStop(0, '#5a8fc9');
-  grad.addColorStop(0.6, COL.sky1);
-  grad.addColorStop(1, '#b5daf0');
+  grad.addColorStop(0.2, COL.sky1);
+  grad.addColorStop(0.21, '#7a5a2c');
+  grad.addColorStop(1, '#221810');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 };
 
 // ---- 天空 ----
 Game.prototype.drawSky = function(ctx) {
-  // 山丘背景贴图（优先）
-  const hillsTex = this.assets.get('hills_bg');
-  if (hillsTex) {
-    ctx.imageSmoothingEnabled = false;
-    // 把山丘图拉伸到整个天空区域
-    try { ctx.drawImage(hillsTex, 0, 0, W, GROUND_Y); } catch(e) {}
-  } else {
-    const grad = ctx.createLinearGradient(0,0,0,GROUND_Y);
-    grad.addColorStop(0, '#5a8fc9');
-    grad.addColorStop(0.6, COL.sky1);
-    grad.addColorStop(1, '#b5daf0');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0,0,W,GROUND_Y);
-  }
+  // 底图和坑腔共用同一张整图，保证接缝处对得上
+  this.drawBackdrop(ctx);
 
-  // 云
+  // 云与太阳只属于地面以上，不能烘进背景图里 —— 否则从坑里往下看会看见云
   for (const c of this.clouds) this.drawCloud(ctx, c.x, c.y, c.w);
-
-  // 太阳
   this.drawPixelCircle(ctx, W-100, 40, 24, '#ffee88');
   this.drawPixelCircle(ctx, W-100, 40, 18, '#ffdd44');
 };
+
 
 Game.prototype.drawCloud = function(ctx, x, y, w) {
   const h = w*0.4;
