@@ -498,13 +498,18 @@ class Game {
       return true;
     } else {
       if (nx < 8 || nx > W - 8) return false;
-      if (ny < GROUND_Y - 40 || ny > GROUND_Y - 4) return false;
+      // 地面上的横向移动只受地图边界限制。
+      // 高度不在这里判 —— 如果要求「当前 y 必须落在新那一列的可站区间内」，
+      // 玩家从平地迈向深坑的那一步就会被判成撞墙，人卡在坑沿上进不去。
+      // 掉进坑里是重力的事，交给 updatePlayer 里的下落逻辑。
+      if (ny < GROUND_Y - 40 - CRATER_MAX || ny > H - 4) return false;
       return true;
     }
   }
 
   summonTempSoldier() {
-    const pos = { x: DOOR_X + (Math.random()-0.5)*80, y: GROUND_Y - 20 };
+    const sx = DOOR_X + (Math.random()-0.5)*80;
+    const pos = { x: sx, y: this.standYAt(sx) - 17 };
     this.soldiers.push({
       x: pos.x, y: pos.y, targetX: pos.x,
       hp: 25, maxHp: 25, attackRange: 130,
@@ -812,10 +817,11 @@ class Game {
 
   syncSoldiers(targetCount) {
     const positions = [];
-    const baseY = GROUND_Y - 20;
     const offsets = [40, -40, 80, -80, 120, -120, 160, -160, 200, -200];
-    for (let i=0;i<Math.min(targetCount, 10);i++)
-      positions.push({x: DOOR_X + (offsets[i]||((i-5)*50)), y: baseY});
+    for (let i=0;i<Math.min(targetCount, 10);i++) {
+      const sx = DOOR_X + (offsets[i]||((i-5)*50));
+      positions.push({x: sx, y: this.standYAt(sx) - 17});   // 士兵同样踩实际地面
+    }
     // 保留临时士兵（他们有 temp:true），只处理永久 ones
     const perms = this.soldiers.filter(s => !s.temp);
     while (perms.length < targetCount) {
@@ -1004,10 +1010,31 @@ class Game {
         const pd = Math.abs(z.x - this.player.x);
         if (pd < 80) { targetX = this.player.x; targetKind = 'player'; targetRoom = null; }
       }
+      // 目标的高度：大门在地表，房间在它自己那一格
+      let targetY = GROUND_Y - 12;
+      if (targetKind === 'player') targetY = this.player.y;
+      else if (targetKind === 'room' && targetRoom) targetY = GROUND_Y + targetRoom.row * TILE;
+
+      // 丧尸贴着脚下的地面走 —— 地被挖穿了它就掉进坑里
+      const gy = this.standYAt(z.x);
+      const restY = gy - 19;
+      if (z.pillarT > 0) {
+        // 搭方块的起跳过程：这半秒内它悬在空中，不受地面吸附
+        z.pillarT = Math.max(0, z.pillarT - dt);
+      } else {
+        z.y += (restY - z.y) * Math.min(1, dt * 12);   // 平滑落到地面，别瞬移
+      }
+
       const dx = targetX - z.x;
       const dist = Math.abs(dx);
       const dir = Math.sign(dx);
-      if (dist > 18) {
+      const tooLow = z.y - targetY > 26;               // 站得太低，够不着
+
+      if (dist <= 18 && tooLow) {
+        // 已经走到目标正下方，却因为地面被砸没了而打不到 ——
+        // 让它像 MC 里那样原地起跳、在脚下垫一块方块，一格一格垫上去。
+        this.zombiePillarUp(z, dt);
+      } else if (dist > 18) {
         z.x += dir * z.speed * dt;
         z.walkAnim += dt * 8;
         z.attackAnim = Math.max(0, z.attackAnim - dt*3);
@@ -1173,6 +1200,21 @@ class Game {
       const ny = p.y + stepY;
       if (this.canPlayerStand(nx, p.y, false)) p.x = nx;
       if (this.canPlayerStand(p.x, ny, false)) p.y = ny;
+      // 被摧毁的地面没有碰撞箱 —— 走到坑上方就往下掉，掉到本列的坑底为止。
+      // 用重力而不是直接吸附：一脚踏空瞬间下坠 85px 会像瞬移，
+      // 掉下去的过程本身才是「这里没有地面了」的反馈。
+      const gy = this.standYAt(p.x);
+      const floorY = gy - 1;
+      if (p.y < floorY) {
+        p.fallV = (p.fallV || 0) + 900 * dt;          // 重力加速度
+        p.y = Math.min(floorY, p.y + p.fallV * dt);
+        if (p.y >= floorY) p.fallV = 0;               // 落地
+      } else {
+        p.fallV = 0;
+        p.y = floorY;
+      }
+      // 上界仍然限制在本列地面往上 40px（原来那条「地面活动带」的厚度）
+      if (p.y < gy - 40) p.y = Math.max(p.y, gy - 40);
       if (ix !== 0) p.facing = ix > 0 ? 1 : -1;
     } else {
       // 地下室：按轴尝试移动，泥土/墙体阻挡
@@ -1418,6 +1460,22 @@ class Game {
     return this.carveGround(col, CRATER_BREACH - this.craterDepth[col]);
   }
 
+  /**
+   * 某一列的**地面站立高度**（脚底所在的 y）。
+   *
+   * 这是「被摧毁的地面没有碰撞箱」的落点：地被挖掉多少，站立面就跟着降多少。
+   * 浅层侵蚀（<8px，只蹭掉草皮）不改变站立高度 —— 那点厚度本来就不承重。
+   */
+  standY(col) {
+    const d = this.groundDepth(col);
+    return Math.max(GROUND_Y - 3, GROUND_Y - 8 + d);
+  }
+
+  /** 实体（玩家/丧尸/士兵）在某个 x 处的站立高度。 */
+  standYAt(x) {
+    return this.standY(Math.floor(x / TILE));
+  }
+
   /** 某一列被挖掉的深度（像素）。渲染靠它画出坑的剖面。 */
   groundDepth(col) {
     if (col < 0 || col >= BASEMENT_COLS) return 0;
@@ -1508,6 +1566,38 @@ class Game {
     this.spawnParticles((room.col + room.size.w / 2) * TILE,
                         GROUND_Y + (room.row + room.size.h / 2) * TILE, COL.stoneLight, 14);
     this.applyRoomEffects();
+  }
+
+  /**
+   * 丧尸搭方块（MC 式垫脚）。
+   *
+   * 触发条件：它已经走到目标正下方，但因为地面被天灾砸没了而够不着。
+   * 做法就是 MC 里那套：原地起跳，在脚下放一块方块，人跟着上升一格。
+   * 反映到地形上就是这一列的坑被回填了一格 —— 丧尸在替你填坑，
+   * 只不过填完是为了爬上来咬你。
+   */
+  zombiePillarUp(z, dt) {
+    z.pillarCd = (z.pillarCd || 0) - dt;
+    if (z.pillarCd > 0) return;
+    z.pillarCd = 0.75;                       // 每块之间留出起跳的时间
+
+    const col = Math.floor(z.x / TILE);
+    if (this.groundDepth(col) <= 0) return;  // 脚下已经是实地，没得垫了
+
+    // 回填一格：注意直接改数组而不是走 patchSurface，
+    // patchSurface 是「一次性填平整列」，那是玩家花钱买的效果，
+    // 丧尸只能一格一格垫。
+    this.craterDepth[col] = Math.max(0, this.craterDepth[col] - TILE);
+    z.pillarT = 0.32;                        // 起跳滞空时间
+    z.y -= TILE;                             // 人跟着上升一格
+    z.attackAnim = 0;
+
+    Sound.sfx('build');
+    this.spawnParticles(col * TILE + TILE / 2, z.y + 19, COL.dirt, 6);
+    if (!this._pillarHintAt || Date.now() - this._pillarHintAt > 10000) {
+      this._pillarHintAt = Date.now();
+      this.log('丧尸在坑里垫方块往上爬！赶紧把坑回填', '#fa6');
+    }
   }
 
   /** 找出某一列破口下方、最靠上的那个房间 —— 丧尸从破口跳下去要啃的目标。 */
@@ -1635,6 +1725,7 @@ class Game {
       damage: baseDmg,
       attackCd: 0, attackInterval: Math.max(0.5, 1.3 - w * 0.03),
       walkAnim: 0, attackAnim: 0,
+      pillarCd: 0, pillarT: 0,      // 搭方块的冷却与滞空计时
       type: 'normal'
     };
     // 快速丧尸：波数>=3，概率随波数增大
@@ -1800,6 +1891,10 @@ class Game {
       rooms: JSON.parse(JSON.stringify(this.rooms)),
       roomIdCounter: this.roomIdCounter,
       grid: this.grid.map(col => col.slice()),
+      craterDepth: this.craterDepth.slice(),   // 地形破坏也要存，否则读档地面凭空复原
+      mode: this.mode,
+      campaignLevel: this.campaignLevel,
+      levelTargetWaves: this.levelTargetWaves,
       atkBonus: this.atkBonus,
       hasBlacksmith: this.hasBlacksmith,
       waveActive: false,          // 恢复时取消波次进行中状态
@@ -1836,6 +1931,12 @@ class Game {
           }
         }
       }
+      if (Array.isArray(data.craterDepth) && data.craterDepth.length === BASEMENT_COLS) {
+        this.craterDepth = data.craterDepth.slice();
+      }
+      if (data.mode) this.mode = data.mode;
+      if (data.campaignLevel) this.campaignLevel = data.campaignLevel;
+      if (data.levelTargetWaves) this.levelTargetWaves = data.levelTargetWaves;
       this.atkBonus = data.atkBonus || 0;
       this.hasBlacksmith = !!data.hasBlacksmith;
       this.waveActive = false;

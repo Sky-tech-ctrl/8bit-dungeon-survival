@@ -732,7 +732,7 @@ Game.prototype.drawPlayer = function(ctx, p) {
   // 阴影（根据当前所在的地面线）
   const groundShadowY = p.inBasement
     ? Math.min(H - 6, p.y + 10)
-    : GROUND_Y - 3;
+    : (this.standYAt ? this.standYAt(p.x) : GROUND_Y - 3);
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
   ctx.fillRect(x-16, groundShadowY, 32, 4);
 
@@ -762,7 +762,9 @@ Game.prototype.drawPlayer = function(ctx, p) {
     else if (moving) fi = WALK_CYCLE[Math.floor(Date.now() / 120) % WALK_CYCLE.length];
 
     // 贴图 1:1 绘制（生成时就是按游戏内尺寸画的，缩放只会糊边）
-    const groundContactY = p.inBasement ? Math.min(H - 6, p.y + 10) : GROUND_Y - 3;
+    const groundContactY = p.inBasement
+      ? Math.min(H - 6, p.y + 10)
+      : (this.standYAt ? this.standYAt(p.x) : GROUND_Y - 3);
     const drawTopY = groundContactY - S.fh + 1;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
@@ -951,9 +953,10 @@ Game.prototype.drawSoldier = function(ctx, s) {
   const shoot = s.shootAnim;
   const x = s.x, y = s.y + bob;
 
-  // 阴影
+  // 阴影贴实际地面（地形可能被天灾挖低了）
+  const sGroundY = this.standYAt ? this.standYAt(x) : GROUND_Y - 3;
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.fillRect(x-8, GROUND_Y-3, 16, 3);
+  ctx.fillRect(x-8, sGroundY, 16, 3);
 
   const sspr = this.assets.get('soldier_sprite');
   // 尺寸自检：旧版的 soldier_sprite.png 是一张 1680×2240 的大图（根本不是
@@ -970,7 +973,7 @@ Game.prototype.drawSoldier = function(ctx, s) {
       fi = WALK_CYCLE[Math.floor(Date.now() / 130) % WALK_CYCLE.length];
     }
     // 落地：士兵站在地面线上，脚底压住影子
-    const topY = GROUND_Y - 3 - SS.fh + 1;
+    const topY = (this.standYAt ? this.standYAt(x) : GROUND_Y - 3) - SS.fh + 1;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     // 士兵面朝丧尸来的方向：站在中线右侧就朝右，反之朝左
@@ -1019,9 +1022,11 @@ Game.prototype.drawZombie = function(ctx, z) {
   const bob = Math.sin(z.walkAnim)*2;
   const x = z.x, y = z.y + bob;
 
-  // 阴影
+  // 阴影落在**脚下那一列的实际地面**上，而不是固定的 GROUND_Y-3。
+  // 地被砸穿之后影子还挂在原来的高度，人却掉进了坑里，看着极其别扭。
+  const shadowY = this.standYAt ? this.standYAt(x) : GROUND_Y - 3;
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.fillRect(x-8*scale, GROUND_Y-3, 16*scale, 3);
+  ctx.fillRect(x-8*scale, shadowY, 16*scale, 3);
 
   ctx.save();
   ctx.translate(x, y);
@@ -1041,8 +1046,7 @@ Game.prototype.drawZombie = function(ctx, z) {
     if (z.attackAnim > 0.4) fi = 3;
     else if (z.walkAnim > 0.3) fi = WALK_CYCLE[Math.floor(z.walkAnim * 1.2) % WALK_CYCLE.length];
 
-    // 落地点：z.y 是 GROUND_Y-22，而影子画在 GROUND_Y-3，
-    // 两者相差 20px —— 旧代码写死 +10，丧尸其实一直悬在影子上方 10px。
+    // 落地点：z.y 是脚底上方 19px 的身体基准点，脚底再往下 20px。
     // 除以 scale 是因为外层已经 ctx.scale 过了，坦克丧尸才不会踩进地里。
     const footY = 20 / scale;
     const topY = footY - ZS.fh;
