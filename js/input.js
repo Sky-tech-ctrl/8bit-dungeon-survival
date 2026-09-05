@@ -66,13 +66,19 @@ Game.prototype.applyPCLayout = function() {
   const scale = Math.min((vW - pad) / W, (vH - pad) / H);
   // 限制最小比例 0.5，最大比例 2.5
   const finalScale = Math.max(0.5, Math.min(2.5, scale));
-  const cssW = Math.floor(W * finalScale);
-  const cssH = Math.floor(H * finalScale);
+  // 宽高各自取整会让比例产生千分之几的偏差（960/720 = 1.3333 会变成 1.3346）。
+  // 先定宽，再由宽反推高，比例就被锁死了。
+  const cssW = Math.round(W * finalScale);
+  const cssH = Math.round(cssW * H / W);
   const container = document.getElementById('gameContainer');
   this.canvas.style.width = cssW + 'px';
   this.canvas.style.height = cssH + 'px';
-  container.style.width = cssW + 'px';
-  container.style.height = cssH + 'px';
+  // 全局 * { box-sizing: border-box }，而容器有 4px 边框 —— 容器和画布设成
+  // 同一个数值的话，容器的内容区只有 cssW-8，画布会比它宽出 8px，
+  // 边框就压在画面上了。把边框宽度补进去。
+  const bw = container.offsetWidth - container.clientWidth || 8;
+  container.style.width = (cssW + bw) + 'px';
+  container.style.height = (cssH + bw) + 'px';
   this._pc = { vW, vH, scale: finalScale, cssW, cssH };
 };
 

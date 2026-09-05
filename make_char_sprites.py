@@ -21,8 +21,9 @@
      主体偏了，角色的脚就会离开它该站的位置
 
  产出：
-   assets/player_sprite.png   36×36 ×4 帧
-   assets/zombie_sprite.png   40×42 ×4 帧
+   assets/player_sprite.png   40×37 ×4 帧
+   assets/zombie_sprite.png   44×43 ×4 帧
+   assets/soldier_sprite.png  50×37 ×4 帧
 
  运行：python make_char_sprites.py
 ========================================================================
@@ -311,6 +312,102 @@ def zombie_frame(kind):
 
 
 # ======================================================================
+# 士兵：44×37 ×4 帧
+# ======================================================================
+# 原来的 soldier_sprite.png 是一张 1680×2240 的大图（不是精灵图），
+# 被硬压进 34×60 来画 —— 既糊，又比玩家高出一大截，三个角色完全不成比例。
+# 这里按和玩家、丧尸同一套标准重画：同样的 1:1 尺寸、同样的四帧、同样的锚点。
+FW_S, FH_S = 50, 37   # 帧宽要容得下开火帧的枪口焰，不然描边会被切掉
+CX_S = 15                     # 锚点：主体中心。步枪朝右伸出，帧同样是右宽左窄
+
+UNI = (58, 122, 180)          # 军服
+UNI_D = (36, 82, 130)
+UNI_L = (98, 164, 216)
+HELM = (74, 92, 74)           # 钢盔
+HELM_D = (50, 66, 50)
+HELM_L = (104, 126, 100)
+GUN = (72, 68, 76)
+GUN_D = (44, 42, 50)
+GUN_L = (110, 106, 116)
+STOCK = (112, 74, 40)         # 枪托木质
+FLASH = (255, 224, 120)
+
+
+def soldier_frame(kind):
+    """kind: 'idle' | 'walkA' | 'walkB' | 'attack'（attack = 开火）"""
+    img = Image.new('RGBA', (FW_S, FH_S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    CX = CX_S
+    bob = 1 if kind in ('walkA', 'walkB') else 0
+    y0 = bob
+
+    # ---------- 腿 ----------
+    if kind == 'walkA':
+        rect(d, CX - 8, 27, 5, 7, UNI_D)
+        rect(d, CX + 2, 27, 5, 6, UNI_D)
+        rect(d, CX - 10, 33, 8, 3, (52, 44, 40))
+        rect(d, CX + 3, 32, 7, 3, (38, 32, 30))
+    elif kind == 'walkB':
+        rect(d, CX - 7, 27, 5, 6, UNI_D)
+        rect(d, CX + 3, 27, 5, 7, UNI_D)
+        rect(d, CX - 9, 32, 7, 3, (38, 32, 30))
+        rect(d, CX + 2, 33, 8, 3, (52, 44, 40))
+    else:
+        rect(d, CX - 5, 27, 4, 7, UNI_D)
+        rect(d, CX + 1, 27, 4, 7, UNI_D)
+        rect(d, CX - 6, 33, 6, 3, (52, 44, 40))
+        rect(d, CX + 1, 33, 6, 3, (52, 44, 40))
+
+    # ---------- 躯干 ----------
+    rect(d, CX - 6, 15 + y0, 13, 12, UNI)
+    rect(d, CX - 6, 15 + y0, 13, 2, UNI_L)
+    rect(d, CX + 4, 16 + y0, 3, 11, UNI_D)
+    rect(d, CX - 6, 23 + y0, 13, 2, (66, 54, 40))          # 武装带
+    rect(d, CX - 1, 23 + y0, 3, 2, (198, 168, 90))         # 带扣
+    rect(d, CX - 7, 16 + y0, 2, 8, UNI_D)                  # 肩带
+    rect(d, CX + 1, 17 + y0, 2, 6, (66, 54, 40))
+
+    # ---------- 头 + 钢盔 ----------
+    rect(d, CX - 4, 7 + y0, 9, 8, (245, 203, 167))         # 脸
+    rect(d, CX + 2, 8 + y0, 3, 7, (206, 158, 122))
+    rect(d, CX - 4, 14 + y0, 9, 1, (206, 158, 122))
+    rect(d, CX - 2, 10 + y0, 2, 2, (32, 40, 56))           # 眼
+    rect(d, CX + 2, 10 + y0, 2, 2, (32, 40, 56))
+    # 钢盔：一顶带帽檐的圆顶盔，是士兵最好认的剪影特征
+    rect(d, CX - 6, 3 + y0, 13, 5, HELM)
+    rect(d, CX - 5, 1 + y0, 11, 3, HELM)
+    rect(d, CX - 5, 1 + y0, 11, 1, HELM_L)
+    rect(d, CX - 7, 7 + y0, 15, 2, HELM_D)                 # 帽檐
+    rect(d, CX + 4, 3 + y0, 3, 5, HELM_D)
+
+    # ---------- 步枪 + 双手 ----------
+    gy = 18 + y0 + (0 if kind == 'attack' else 1)          # 开火时端平
+    rect(d, CX - 8, 18 + y0, 4, 7, UNI)                    # 后手（托枪托）
+    rect(d, CX - 8, 24 + y0, 4, 3, (245, 203, 167))
+    rect(d, CX + 5, gy - 1, 6, 5, UNI)                     # 前手
+    rect(d, CX + 9, gy, 4, 4, (245, 203, 167))
+
+    rect(d, CX + 2, gy + 1, 7, 4, STOCK)                   # 枪托
+    rect(d, CX + 2, gy + 1, 7, 1, (146, 100, 56))
+    rect(d, CX + 9, gy, 16, 4, GUN)                        # 机匣 + 枪管
+    rect(d, CX + 9, gy, 16, 1, GUN_L)
+    rect(d, CX + 9, gy + 3, 16, 1, GUN_D)
+    rect(d, CX + 22, gy + 1, 5, 2, GUN_D)                  # 枪口
+    rect(d, CX + 11, gy + 4, 3, 3, GUN_D)                  # 弹匣
+    rect(d, CX + 14, gy - 2, 2, 2, GUN_L)                  # 准星
+
+    if kind == 'attack':
+        # 枪口焰：开火帧必须一眼看出在开火
+        rect(d, CX + 27, gy, 4, 4, FLASH)
+        rect(d, CX + 27, gy + 1, 6, 2, FLASH)
+        rect(d, CX + 31, gy + 1, 2, 2, (255, 255, 255))
+        rect(d, CX + 26, gy - 2, 2, 2, (255, 176, 72))
+        rect(d, CX + 26, gy + 4, 2, 2, (255, 176, 72))
+
+    return img
+
+
+# ======================================================================
 def build_sheet(fn, frames, fw, fh, path, name):
     sheet = Image.new('RGBA', (fw * len(frames), fh), (0, 0, 0, 0))
     for i, kind in enumerate(frames):
@@ -334,17 +431,22 @@ if __name__ == '__main__':
                     os.path.join(OUT, 'zombie_sprite.png'), 'zombie')
     print('  zombie_sprite.png  ', z.size, ' 单帧 {}x{} ×{} 帧'.format(FW_Z, FH_Z, len(order)))
 
+    sd = build_sheet(soldier_frame, order, FW_S, FH_S,
+                     os.path.join(OUT, 'soldier_sprite.png'), 'soldier')
+    print('  soldier_sprite.png ', sd.size, ' 单帧 {}x{} ×{} 帧'.format(FW_S, FH_S, len(order)))
+
     # 放大 6 倍另存一份，纯粹方便肉眼检查像素有没有画错。
     # 放在 preview/ 而不是 assets/：它们不是游戏资源，也不该被部署出去。
     prev = os.path.join(HERE, 'preview')
     os.makedirs(prev, exist_ok=True)
-    for name, im in (('player', p), ('zombie', z)):
+    for name, im in (('player', p), ('zombie', z), ('soldier', sd)):
         im.resize((im.width * 6, im.height * 6), Image.NEAREST).save(
             os.path.join(prev, '{}.png'.format(name)))
     print('')
     print('  render.js 需要的锚点常量：')
     print('    PLAYER_SPRITE = {{ frames: 4, fw: {}, fh: {}, anchorX: {} }}'.format(FW_P, FH_P, CX_P))
     print('    ZOMBIE_SPRITE = {{ frames: 4, fw: {}, fh: {}, anchorX: {} }}'.format(FW_Z, FH_Z, CX_Z))
+    print('    SOLDIER_SPRITE = {{ frames: 4, fw: {}, fh: {}, anchorX: {} }}'.format(FW_S, FH_S, CX_S))
     print('')
     print('  （放大预览已输出到 preview/，不参与游戏加载、不进版本库）')
     print('完成。')

@@ -28,6 +28,7 @@ const PLAYER = {
 const SPRITE_SPEC = {
   player: { frames: 4, fw: 40, fh: 37, anchorX: 15 },
   zombie: { frames: 4, fw: 44, fh: 43, anchorX: 15 },
+  soldier: { frames: 4, fw: 50, fh: 37, anchorX: 15 },
 };
 // 帧序：0=idle 1=walkA 2=walkB 3=attack
 // 走路走四拍 A→idle→B→idle：比 A→B 两拍多一个双脚并拢的过渡，

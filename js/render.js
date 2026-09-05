@@ -845,39 +845,33 @@ Game.prototype.drawSoldier = function(ctx, s) {
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
   ctx.fillRect(x-8, GROUND_Y-3, 16, 3);
 
-  // 精灵图（3 帧 idle/walk/shoot）
   const sspr = this.assets.get('soldier_sprite');
-  if (sspr) {
-    const frames = 3;
-    const fw = sspr.naturalWidth / frames;
-    const fh = sspr.naturalHeight;
+  // 尺寸自检：旧版的 soldier_sprite.png 是一张 1680×2240 的大图（根本不是
+  // 精灵图），被硬压进 34×60 来画 —— 又糊，又比玩家高出一大截。
+  // 对不上规格就退回下面的代码绘制版本，别再把大图硬塞进来。
+  const SS = SPRITE_SPEC.soldier;
+  const soldierValid = !!(sspr &&
+    sspr.naturalWidth === SS.fw * SS.frames &&
+    sspr.naturalHeight === SS.fh);
+  if (soldierValid) {
     let fi = 0;
-    if (shoot > 0.4) fi = 2;
-    else if (Math.abs(s.x - (s.targetX||s.x)) > 2) fi = 1;
-    const tw = 34, th = 60;
+    if (shoot > 0.4) fi = 3;
+    else if (Math.abs(s.x - (s.targetX || s.x)) > 2) {
+      fi = WALK_CYCLE[Math.floor(Date.now() / 130) % WALK_CYCLE.length];
+    }
+    // 落地：士兵站在地面线上，脚底压住影子
+    const topY = GROUND_Y - 3 - SS.fh + 1;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    // 士兵面朝丧尸方向（与丧尸相反）
-    const faceRight = s.x > DOOR_X;  // 在右侧的士兵面朝左→但默认精灵朝右，需要翻转
-    if (faceRight) {
-      // 士兵在右侧，丧尸从右来，士兵面朝右→不用翻
+    // 士兵面朝丧尸来的方向：站在中线右侧就朝右，反之朝左
+    if (s.x > DOOR_X) {
+      ctx.drawImage(sspr, fi * SS.fw, 0, SS.fw, SS.fh, x - SS.anchorX, topY, SS.fw, SS.fh);
     } else {
-      // 士兵在左侧，丧尸从左来，士兵面朝左→翻转
-      ctx.translate(x, y - 34);
+      ctx.translate(x, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(sspr, fi*fw, 0, fw, fh, -tw/2, 0, tw, th);
-      ctx.restore();
-      return;
+      ctx.drawImage(sspr, fi * SS.fw, 0, SS.fw, SS.fh, -SS.anchorX, topY, SS.fw, SS.fh);
     }
-    ctx.drawImage(sspr, fi*fw, 0, fw, fh, x - tw/2, y - 34, tw, th);
     ctx.restore();
-    // 枪口闪光
-    if (shoot > 0.5) {
-      ctx.fillStyle = COL.gold;
-      ctx.fillRect(x + 14, y - 14, 5, 5);
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(x + 16, y - 12, 3, 3);
-    }
     return;
   }
 

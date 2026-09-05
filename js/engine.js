@@ -1056,7 +1056,14 @@ class Game {
     } else {
       // 地下室：按轴尝试移动，泥土/墙体阻挡
       const nx = p.x + stepX;
-      if (this.canPlayerStand(nx, p.y, true)) p.x = nx;
+      if (this.canPlayerStand(nx, p.y, true)) {
+        p.x = nx;
+      } else if (ix !== 0) {
+        // 地下室除了中央竖井和已建房间之外全是实心泥土，竖井里左右一共只有
+        // 几十像素的余地。玩家按 A/D 顶住土墙时，画面上什么都不会发生 ——
+        // 看着就像按键失灵。这里给一句话说清楚，别让人以为是 bug。
+        this.hintBlocked(dt);
+      }
       const ny = p.y + stepY;
       if (this.canPlayerStand(p.x, ny, true)) p.y = ny;
       if (Math.abs(ix) > Math.abs(iy) && ix !== 0) p.facing = ix > 0 ? 1 : -1;
@@ -1079,6 +1086,22 @@ class Game {
     if (!p.inBasement) this.autoCollectPiles();
   }
 
+  // ---- 两条「按键其实没坏」的提示，都做了限流，免得刷屏 ----
+  hintBlocked(dt) {
+    this._blockedT = (this._blockedT || 0) + (dt || 0.016);
+    if (this._blockedT < 0.45) return;            // 顶住土墙约半秒才提示
+    this._blockedT = 0;
+    if (Date.now() - (this._blockedLogAt || 0) < 6000) return;
+    this._blockedLogAt = Date.now();
+    this.log('这里是实心泥土 —— 点击空格子建造房间，才能往两边拓宽', '#c9a');
+  }
+
+  hintNoTargetBelow() {
+    if (Date.now() - (this._belowLogAt || 0) < 6000) return;
+    this._belowLogAt = Date.now();
+    this.log('丧尸都在地面上 —— 从中央竖井按 W / ↑ 回地面再挥剑', '#c9a');
+  }
+
   playerMeleeAttack() {
     const p = this.player;
     const range = p.atkRange;
@@ -1087,7 +1110,11 @@ class Game {
     const atkMult = this.getBuffMult('playerAtk');
     const dmg = p.atk * atkMult;
     let hit = false;
-    // 如果玩家在地下室，就不攻击丧尸（丧尸在地面），只产生挥动特效
+    // 如果玩家在地下室，就不攻击丧尸（丧尸在地面），只产生挥动特效。
+    // 同样要说明原因：在下面挥剑没有任何命中反馈，很容易被当成攻击键坏了。
+    if (p.inBasement) {
+      this.hintNoTargetBelow();
+    }
     if (!p.inBasement) {
       for (const z of this.zombies) {
         const dx = z.x - hitX;
