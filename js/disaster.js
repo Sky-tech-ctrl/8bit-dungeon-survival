@@ -1,9 +1,12 @@
 // ==================== 自然灾害系统 ====================
 //
 // 三种天灾，各自的「破坏形状」不同 —— 这是它们在玩法上唯一真正的区别：
-//   陨石 meteor    砸出一个窄而深的坑（1~3 列），命中列的房间重伤
-//   地震 quake     不砸穿地表，但沿一条水平带广域震坏房间，并随机震裂几处地表
-//   火山 volcano   从某一列喷发，摧毁一大片地表（5~7 列），并持续掉落岩浆
+//   陨石 meteor    一个**大坑**：中心整段洞穿，边缘按距离递减地削薄
+//   地震 quake     **满地小坑**：撒出十几个浅坑，单次穿不透，反复几次就千疮百孔
+//   火山 volcano   **均匀侵蚀整个地表**：所有列同时削掉相同的一层，一视同仁
+//
+// 三者的差别刻意做成「面积 × 深度」的两个极端：
+// 陨石是窄而深，地震是广而浅，火山是全场等深。
 //
 // 与地形的关系：地表被砸穿后，那一列的房间就**裸露在外**，
 // 丧尸会直接跳下去啃房间，而不是绕去撞大门。修补手段是造混凝土块。
@@ -17,19 +20,19 @@ const DISASTER_TYPES = {
     name: '陨石', icon: '☄',
     color: '#ff8844',
     warn: '陨石正在坠落',
-    desc: '砸穿地表，命中处的房间重创',
+    desc: '砸出一个大坑，中心洞穿、边缘削薄',
   },
   quake: {
     name: '地震', icon: '〰',
     color: '#c9a227',
     warn: '地壳开始震动',
-    desc: '大范围震坏地下室，地表出现裂口',
+    desc: '满地小坑，地下室大范围震损',
   },
   volcano: {
     name: '火山喷发', icon: '🌋',
     color: '#ff4422',
     warn: '地底传来轰鸣',
-    desc: '喷发点周围地表大面积塌陷',
+    desc: '均匀侵蚀整个地表，全场同时变薄',
   },
 };
 
@@ -143,54 +146,76 @@ class DisasterSystem {
 
   _meteor(col) {
     const g = this.game;
-    const w = 1 + Math.floor(Math.random() * 3);          // 1~3 列
-    const from = Math.max(0, col - (w >> 1));
-    for (let c = from; c < Math.min(BASEMENT_COLS, from + w); c++) {
-      g.breakSurface(c);
-      g.damageRoomsInColumn(c, 70, 3);                     // 只砸穿上面三层
+    // 一个**大坑**：中心整段洞穿，边缘按距离递减地削薄，
+    // 所以坑沿是斜的而不是一刀切下去 —— 这才像被砸出来的。
+    const radius = 2 + Math.floor(Math.random() * 3);        // 2~4，总宽 5~9 列
+    for (let d = -radius; d <= radius; d++) {
+      const c = col + d;
+      if (c < 0 || c >= BASEMENT_COLS) continue;
+      const t = 1 - Math.abs(d) / (radius + 1);              // 中心 1，边缘趋 0
+      // 中心那几列直接洞穿，越靠边只是削薄
+      g.damageSurface(c, t >= 0.7 ? 1 : t * 0.9);
     }
-    this.effects.push({ kind: 'crater', x: (from + w / 2) * TILE, y: GROUND_Y, t: 1.2 });
-    for (let i = 0; i < 24; i++) {
-      g.spawnParticles((from + Math.random() * w) * TILE, GROUND_Y - Math.random() * 20, '#ff8844', 1);
+    // 冲击波额外砸伤中心正下方的房间
+    for (let d = -1; d <= 1; d++) g.damageRoomsInColumn(col + d, 70, 3);
+
+    this.effects.push({ kind: 'crater', x: col * TILE + TILE / 2, y: GROUND_Y,
+                        t: 1.4, w: (radius * 2 + 1) * TILE });
+    for (let i = 0; i < 30; i++) {
+      g.spawnParticles((col + (Math.random() - 0.5) * radius * 2) * TILE,
+                       GROUND_Y - Math.random() * 24, '#ff8844', 1);
     }
   }
 
   _quake(col) {
     const g = this.game;
-    // 地震不砸穿地表，而是沿一条水平带广域震坏 —— 破坏形状和陨石完全不同
+    // **满地小坑**：撒出很多个浅坑，单次基本穿不透，
+    // 但地震反复来几次，整片地表就会被啃得千疮百孔。
+    // 这跟陨石「一个大洞」形成鲜明对比 —— 面积广、深度浅。
+    const pits = 10 + Math.floor(Math.random() * 8);         // 10~17 个
+    const hit = new Set();
+    for (let i = 0; i < pits; i++) {
+      const c = Math.floor(Math.random() * BASEMENT_COLS);
+      hit.add(c);
+      g.damageSurface(c, 0.28 + Math.random() * 0.34);       // 浅
+    }
+    // 地下的破坏才是地震的主场：沿一条水平带广域震坏房间
     const row = 1 + Math.floor(Math.random() * Math.max(1, BASEMENT_ROWS - 3));
     for (const r of g.rooms.slice()) {
       if (r.row <= row + 1 && r.row + r.size.h >= row) g.damageRoom(r, 45);
     }
-    // 顺带震裂几处地表
-    const cracks = 2 + Math.floor(Math.random() * 3);
-    for (let i = 0; i < cracks; i++) {
-      g.breakSurface(Math.floor(Math.random() * BASEMENT_COLS));
-    }
-    this.effects.push({ kind: 'quake', t: 1.8 });
-    g.spawnParticles(W / 2, GROUND_Y + 40, '#c9a227', 20);
+    this.effects.push({ kind: 'quake', t: 2.0 });
+    for (const c of hit) g.spawnParticles(c * TILE + TILE / 2, GROUND_Y, '#c9a227', 4);
   }
 
   _volcano(col) {
     const g = this.game;
-    const w = 5 + Math.floor(Math.random() * 3);           // 5~7 列，最广
-    const from = Math.max(0, col - (w >> 1));
-    for (let c = from; c < Math.min(BASEMENT_COLS, from + w); c++) {
-      g.breakSurface(c);
-      g.damageRoomsInColumn(c, 55, 2);
+    // **均匀侵蚀整个地表**：所有列同时削掉相同的一层，一视同仁。
+    // 这是三种天灾里唯一「全场生效」的 —— 它不挑地方，它就是把整层地皮
+    // 磨薄一圈。单次通常穿不透，但每喷发一次全场就离塌陷更近一步，
+    // 而且已经被砸薄过的地方会先破。
+    const erosion = 0.22 + Math.random() * 0.16;
+    let breached = 0;
+    for (let c = 0; c < BASEMENT_COLS; c++) {
+      if (g.damageSurface(c, erosion)) breached++;
     }
-    // 岩浆：喷发后继续往下掉一小会儿
-    for (let i = 0; i < 14; i++) {
+    g.log(`🌋 熔岩漫过整片地表，全场侵蚀 ${Math.round(erosion * 100)}%` +
+          (breached ? `，${breached} 处塌陷` : ''), '#ff6644');
+
+    // 喷发口附近额外掉岩浆，让「从哪里喷的」仍然看得出来
+    for (let i = 0; i < 20; i++) {
       this.effects.push({
         kind: 'lava',
-        x: (from + Math.random() * w) * TILE,
-        y: GROUND_Y - 40 - Math.random() * 60,
-        vx: (Math.random() - 0.5) * 30,
-        vy: 90 + Math.random() * 80,
+        x: (col + (Math.random() - 0.5) * 6) * TILE,
+        y: GROUND_Y - 40 - Math.random() * 70,
+        vx: (Math.random() - 0.5) * 40,
+        vy: 90 + Math.random() * 90,
         t: 1.4 + Math.random(),
       });
     }
-    this.effects.push({ kind: 'crater', x: (from + w / 2) * TILE, y: GROUND_Y, t: 1.6 });
+    // 全场覆盖一层熔岩光，强调「平等」
+    this.effects.push({ kind: 'ash', t: 2.2 });
+    this.effects.push({ kind: 'crater', x: col * TILE + TILE / 2, y: GROUND_Y, t: 1.6, w: 6 * TILE });
   }
 
   // ------------------------------------------------------------- 给 HUD

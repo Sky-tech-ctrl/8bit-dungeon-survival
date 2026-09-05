@@ -326,9 +326,15 @@ class Game {
     // 开发者模式的开关。刻意放在 reset 里一并清掉 —— 换局不该带着作弊状态
     this.dev = { god: false, doorGod: false, infiniteRes: false };
 
-    // 地表完整度：每列一个布尔值。被天灾砸穿后变 false，
-    // 那一列下方的房间就「裸露」，丧尸会直接跳下去啃它。
-    this.surface = new Array(BASEMENT_COLS).fill(true);
+    // 地表完整度：每列一个 0~1 的数值，1 = 完好，0 = 洞穿。
+    //
+    // 这里刻意用连续值而不是布尔值：火山的「均匀侵蚀整个地表」用布尔量
+    // 根本表达不出来 —— 那是让整条地表一层层变薄，薄到零才破。
+    // 有了连续值，三种天灾的破坏形状才真正拉得开：
+    //   陨石 一个大坑（中心洞穿、边缘削薄）
+    //   地震 满地小坑（很多列各掉一点，反复几次才穿）
+    //   火山 全场等量侵蚀（每次喷发所有列同时变薄）
+    this.surface = new Array(BASEMENT_COLS).fill(1);
     this.hasForecast = false;          // 是否已建天气预报站
 
     // 灾害系统。主线前几关不开（见 beginCampaignLevel）
@@ -1371,19 +1377,45 @@ class Game {
 
   // ==================== 地形破坏 ====================
 
-  /** 砸穿某一列的地表。返回是否真的造成了新破口。 */
-  breakSurface(col) {
+  /**
+   * 削薄某一列的地表。amount 为 0~1。
+   * 返回「这一下是否让它新破开了」—— 只有跨过 0 的那一刻才算破口，
+   * 后续再砸同一列不会重复触发提示和塌方伤害。
+   */
+  damageSurface(col, amount) {
     if (col < 0 || col >= BASEMENT_COLS) return false;
-    if (!this.surface[col]) return false;
-    this.surface[col] = false;
-    this.spawnParticles(col * TILE + TILE / 2, GROUND_Y, COL.dirt, 8);
-    // 只在本波第一次砸穿时提示一次，免得一场天灾刷十行同样的话
-    if (!this._holeHintAt || Date.now() - this._holeHintAt > 8000) {
-      this._holeHintAt = Date.now();
-      const c = ROOM_TYPES.concrete.cost;
-      this.log(`地面被砸穿！点击缺口可用混凝土修补（${c.gold}◉）`, '#9cf');
+    const before = this.surface[col];
+    if (before <= 0) return false;
+    this.surface[col] = Math.max(0, before - amount);
+    const breached = this.surface[col] <= 0;
+
+    this.spawnParticles(col * TILE + TILE / 2, GROUND_Y,
+                        breached ? COL.dirt : COL.dirtDark, breached ? 8 : 3);
+
+    if (breached) {
+      // 塌方砸到下面的房间：这是「地表破了」在地下的直接后果
+      const room = this.exposedRoomAt(col);
+      if (room) this.damageRoom(room, 20);
+      // 只在本波第一次砸穿时提示一次，免得一场天灾刷十行同样的话
+      if (!this._holeHintAt || Date.now() - this._holeHintAt > 8000) {
+        this._holeHintAt = Date.now();
+        const c = ROOM_TYPES.concrete.cost;
+        this.log(`地面被砸穿！点击缺口可用混凝土修补（${c.gold}◉）`, '#9cf');
+      }
     }
-    return true;
+    return breached;
+  }
+
+  /** 直接砸穿一列（等价于削掉全部完整度）。 */
+  breakSurface(col) {
+    return this.damageSurface(col, 1);
+  }
+
+  /** 某一列的完整度，0~1。渲染要靠它决定地表画多厚。 */
+  surfaceIntegrity(col) {
+    if (col < 0 || col >= BASEMENT_COLS) return 1;
+    const v = this.surface[col];
+    return typeof v === 'number' ? v : (v ? 1 : 0);
   }
 
   /**
@@ -1413,15 +1445,15 @@ class Game {
   /** 修补地表（混凝土块建成时调用）。 */
   patchSurface(col) {
     if (col < 0 || col >= BASEMENT_COLS) return false;
-    if (this.surface[col]) return false;
-    this.surface[col] = true;
+    if (this.surface[col] >= 1) return false;
+    this.surface[col] = 1;
     this.log(`⬛ 第 ${col} 列地面已修补`, '#9cf');
     return true;
   }
 
   /** 某一列是否破口 —— 丧尸判断能不能从这里下去。 */
   isHole(col) {
-    return col >= 0 && col < BASEMENT_COLS && !this.surface[col];
+    return col >= 0 && col < BASEMENT_COLS && this.surfaceIntegrity(col) <= 0;
   }
 
   // ==================== 房间耐久 ====================

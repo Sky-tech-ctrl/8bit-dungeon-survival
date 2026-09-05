@@ -50,25 +50,60 @@ Game.prototype.render = function() {
 //      地下室是整块重填的，早画会被盖掉。
 Game.prototype.drawSurfaceHoles = function(ctx) {
   if (!this.surface) return;
+  // 地表层里**画面上真正看得见的只有 GROUND_Y 以上那 8px**（草皮）——
+  // GROUND_Y 往下的表层土随后会被 drawBasement 整块重绘覆盖掉。
+  // 所以 0~100% 的侵蚀必须映射到这 8px 上；按 16px 算的话，
+  // 侵蚀超过 50% 之后画面就不再变化，玩家看不出「快穿了」。
+  const TOP = GROUND_Y - 8;
+  const FULL = 8;
   for (let c = 0; c < BASEMENT_COLS; c++) {
-    if (this.surface[c]) continue;
+    const t = this.surfaceIntegrity(c);
+    if (t >= 1) continue;                // 完好就什么都不用做
     const x = c * TILE;
+    // 被侵蚀掉的厚度。半侵蚀必须画出来 —— 否则火山「全场变薄」在画面上
+    // 完全看不见，玩家只会觉得地突然就塌了。
+    const eaten = Math.ceil((1 - t) * FULL);
+
     ctx.save();
     ctx.beginPath();
-    ctx.rect(x, GROUND_Y - 14, TILE, 14);
+    ctx.rect(x, TOP, TILE, eaten);
     ctx.clip();
-    this.drawSky(ctx);                     // 按破口形状把天空补回去
+    this.drawSky(ctx);                   // 按侵蚀深度把天空补回去
     ctx.restore();
-    // 破口两侧的断茬，做出「被砸烂」而不是「被橡皮擦擦掉」的感觉
+
+    // 侵蚀面的锯齿断茬，让边界不是一条直线
+    ctx.fillStyle = COL.dirtDark;
+    for (let k = 0; k < TILE; k += 4) {
+      const j = ((c * 13 + k) % 3);
+      ctx.fillRect(x + k, TOP + eaten, 4, 2 + j);
+    }
+    if (t > 0) {
+      // 还没穿：剩下的土层按侵蚀程度递进压暗。
+      // 固定压暗值读不出「25% 和 75% 有什么不同」—— 地表层总共才 16px，
+      // 光靠厚度变化眼睛分辨不出来，得靠明度补上这个信息。
+      ctx.fillStyle = `rgba(0,0,0,${(0.08 + (1 - t) * 0.42).toFixed(3)})`;
+      ctx.fillRect(x, TOP + eaten, TILE, FULL - eaten);
+      // 侵蚀过半时补几道裂纹，进一步区分「快穿了」和「刚被蹭到」
+      if (t < 0.5) {
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        for (let k = 2; k < TILE; k += 9) {
+          ctx.fillRect(x + k + ((c * 5 + k) % 3), TOP + eaten + 1, 1, FULL - eaten - 1);
+        }
+      }
+    }
+
+    // 两侧断茬
     ctx.fillStyle = COL.dirtDark;
     for (let k = 0; k < 5; k++) {
       const h = 3 + ((c * 7 + k * 13) % 6);
-      ctx.fillRect(x - 3, GROUND_Y - 12 + k * 3, 4, h);
-      ctx.fillRect(x + TILE - 1, GROUND_Y - 12 + k * 3, 4, h);
+      ctx.fillRect(x - 3, TOP + eaten - 6 + k * 3, 4, h);
+      ctx.fillRect(x + TILE - 1, TOP + eaten - 6 + k * 3, 4, h);
     }
-    ctx.fillStyle = COL.grassDark;
-    ctx.fillRect(x - 3, GROUND_Y - 13, 4, 3);
-    ctx.fillRect(x + TILE - 1, GROUND_Y - 13, 4, 3);
+    if (t <= 0) {
+      ctx.fillStyle = COL.grassDark;
+      ctx.fillRect(x - 3, GROUND_Y - 13, 4, 3);
+      ctx.fillRect(x + TILE - 1, GROUND_Y - 13, 4, 3);
+    }
   }
 };
 
@@ -76,7 +111,7 @@ Game.prototype.drawSurfaceHoles = function(ctx) {
 Game.prototype.drawHoleShafts = function(ctx) {
   if (!this.surface) return;
   for (let c = 0; c < BASEMENT_COLS; c++) {
-    if (this.surface[c]) continue;
+    if (!this.isHole(c)) continue;
     const x = c * TILE;
     // 一格深的敞口，越往下越暗
     for (let k = 0; k < TILE; k++) {
@@ -1082,13 +1117,19 @@ Game.prototype.drawDisasterFX = function(ctx) {
     if (e.kind === 'crater') {
       const a = Math.min(1, e.t);
       ctx.fillStyle = `rgba(255,140,60,${a * 0.7})`;
-      const r = (1.6 - e.t) * 90;
+      const r = Math.min(e.w || 90, (1.6 - e.t) * (e.w || 90) * 1.2);
       ctx.fillRect(e.x - r / 2, GROUND_Y - 8, r, 12);
     } else if (e.kind === 'lava') {
       ctx.fillStyle = e.t > 0.6 ? '#ff6622' : '#aa2200';
       ctx.fillRect(Math.floor(e.x), Math.floor(e.y), 4, 6);
       ctx.fillStyle = '#ffcc44';
       ctx.fillRect(Math.floor(e.x) + 1, Math.floor(e.y), 2, 2);
+    } else if (e.kind === 'ash') {
+      // 火山是唯一「全场生效」的天灾，所以它的特效也要铺满整条地表 ——
+      // 玩家一眼就能看出这次不是砸了某一处，而是整片地皮被磨了一层
+      const a = Math.min(1, e.t / 2.2);
+      ctx.fillStyle = `rgba(255,80,30,${(a * 0.16).toFixed(3)})`;
+      ctx.fillRect(0, GROUND_Y - 16, W, 20);
     } else if (e.kind === 'quake') {
       // 地震：地下室整体压一层土黄，配合屏幕抖动
       ctx.fillStyle = `rgba(201,162,39,${0.10 * Math.min(1, e.t)})`;
