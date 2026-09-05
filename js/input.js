@@ -166,6 +166,28 @@ Game.prototype.setupInput = function() {
     'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyJ',
   ]);
 
+  // KeyboardEvent.code 是「物理键位」，正常情况下最可靠。但它并非永远存在：
+  // 部分输入法、远程桌面、虚拟键盘、以及老浏览器给出的 code 是空的，
+  // 只剩 key 或已废弃的 keyCode。那种情况下如果只认 code，
+  // 按键就会静默失效 —— 从玩家角度看就是「这个键坏了」。
+  // 所以按 code → key → keyCode 的顺序逐级降级。
+  function normCode(e) {
+    if (e.code) return e.code;
+    const k = e.key;
+    if (k) {
+      if (k.length === 1 && /[a-zA-Z]/.test(k)) return 'Key' + k.toUpperCase();
+      if (k === ' ' || k === 'Spacebar') return 'Space';
+      if (/^Arrow(Left|Right|Up|Down)$/.test(k)) return k;
+      if (k === 'Escape' || k === 'Esc') return 'Escape';
+    }
+    const kc = e.keyCode || e.which || 0;
+    if (kc >= 65 && kc <= 90) return 'Key' + String.fromCharCode(kc);
+    if (kc === 32) return 'Space';
+    if (kc === 27) return 'Escape';
+    if (kc >= 37 && kc <= 40) return ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'][kc - 37];
+    return '';
+  }
+
   // 松开所有按键。
   // 必须在窗口失焦时调用：按住 A 的同时 Alt-Tab 切走，keyup 事件是收不到的，
   // KeyA 会永久卡在 true。再配合移动逻辑里的方向抵消，卡住的键至多让人物
@@ -178,29 +200,48 @@ Game.prototype.setupInput = function() {
   };
 
   window.addEventListener('keydown', (e) => {
+    this._dbgKey && this._dbgKey(e);          // F2 诊断面板（默认关闭）
+
     // 焦点在输入框里时（登录框、游戏心得）键盘归输入框，游戏不抢
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
 
-    this.input.keys[e.code] = true;
+    // 输入法正在处理这次按键（中文模式下敲字母就是这种情况）。
+    // 此时字母键会被输入法吃掉，游戏收到的是一个「正在组词」的占位事件，
+    // 方向键和空格却不受影响 —— 于是表现为「字母键失灵、方向键正常」。
+    // 这种事从 JS 里救不回来，只能告诉玩家切到英文输入模式。
+    if (e.isComposing || e.keyCode === 229) {
+      this.warnIME();
+      return;
+    }
 
-    if (GAME_KEYS.has(e.code) && this.running && !this.paused && !this.gameOver) {
+    const code = normCode(e);
+    if (!code) return;
+    this.input.keys[code] = true;
+
+    if (GAME_KEYS.has(code) && this.running && !this.paused && !this.gameOver) {
       e.preventDefault();
     }
 
     // ESC：暂停面板打开时→恢复；否则→关闭建造菜单
-    if (e.code === 'Escape') {
+    if (code === 'Escape') {
       if (this.paused) this.togglePause(false);
       else this.hideBuildPopup();
     }
     // P 键：切换暂停
-    if (e.code === 'KeyP' && this.running && !this.gameOver) {
+    if (code === 'KeyP' && this.running && !this.gameOver) {
       this.togglePause();
+    }
+    // F2：按键诊断面板 —— 排查「某个键没反应」时用
+    if (code === 'F2' || e.key === 'F2') {
+      e.preventDefault();
+      this.toggleKeyDebug();
     }
   });
 
   window.addEventListener('keyup', (e) => {
-    this.input.keys[e.code] = false;
+    const code = normCode(e);
+    if (code) this.input.keys[code] = false;
   });
 
   // 切走窗口 / 切走标签页：一律松开所有键，避免按键卡死
@@ -424,4 +465,64 @@ Game.prototype.setupVirtualPad = function() {
   atkBtn.addEventListener('touchstart', (e) => { e.preventDefault(); pressAtk(); }, { passive: false });
   atkBtn.addEventListener('touchend', (e) => { e.preventDefault(); releaseAtk(); }, { passive: false });
   atkBtn.addEventListener('touchcancel', releaseAtk);
+};
+
+// ============================================================================
+// 按键诊断
+// ============================================================================
+// 排查「某个键没反应」时，最难的是分不清究竟是
+//   (a) 浏览器/输入法/系统快捷键把键吃了，游戏压根没收到
+//   (b) 游戏收到了但逻辑没生效
+// 这两件事的修法完全不同，靠猜没有意义。下面两个东西就是用来把它们分开的。
+// ============================================================================
+
+// ---- 输入法拦截提示 ----
+// 中文输入法处于中文模式时会吞掉字母键（游戏只能收到一个 keyCode 229 的
+// 占位事件），而方向键和空格不受影响 —— 于是表现为「WASD/J 失灵、方向键
+// 和空格正常」。这在 JS 里救不回来，只能明确告诉玩家。
+Game.prototype.warnIME = function() {
+  if (Date.now() - (this._imeWarnAt || 0) < 8000) return;
+  this._imeWarnAt = Date.now();
+  this.log('输入法正在拦截字母键 —— 按 Shift 切到英文模式（或用方向键+空格操作）', '#fc6');
+};
+
+// ---- F2：按键诊断面板 ----
+Game.prototype.toggleKeyDebug = function() {
+  let box = document.getElementById('keyDebug');
+  if (box) {                       // 再按一次关掉
+    box.remove();
+    this._dbgKey = null;
+    return;
+  }
+  box = document.createElement('div');
+  box.id = 'keyDebug';
+  box.style.cssText =
+    'position:fixed;left:8px;bottom:8px;z-index:100001;background:rgba(8,8,16,.92);' +
+    'color:#8f8;font:12px/1.7 Consolas,monospace;padding:10px 12px;border:2px solid #4a4a6a;' +
+    'border-radius:8px;white-space:pre;pointer-events:none;max-width:92vw';
+  box.textContent = '按键诊断已开启（再按 F2 关闭）\n请按下没反应的键…';
+  document.body.appendChild(box);
+
+  this._dbgKey = (e) => {
+    const held = Object.entries(this.input.keys).filter(([, v]) => v).map(([k]) => k);
+    box.textContent =
+      '按键诊断  (F2 关闭)\n' +
+      '─────────────────────────────\n' +
+      'code        : ' + (e.code || '(空)') + '\n' +
+      'key         : ' + JSON.stringify(e.key) + '\n' +
+      'keyCode     : ' + (e.keyCode || e.which || 0) +
+        ((e.keyCode === 229) ? '   ← 输入法正在拦截！' : '') + '\n' +
+      'isComposing : ' + !!e.isComposing + '\n' +
+      '修饰键      : ' + [e.ctrlKey && 'Ctrl', e.altKey && 'Alt',
+                           e.shiftKey && 'Shift', e.metaKey && 'Meta']
+                           .filter(Boolean).join('+') + '\n' +
+      '事件目标    : ' + ((e.target && e.target.tagName) || '?') +
+        (e.target && e.target.id ? '#' + e.target.id : '') + '\n' +
+      '─────────────────────────────\n' +
+      '当前按住    : ' + (held.length ? held.join(' ') : '(无)') + '\n' +
+      '游戏状态    : running=' + this.running + ' paused=' + this.paused +
+        ' gameOver=' + this.gameOver + '\n' +
+      '玩家        : x=' + Math.round(this.player.x) + ' y=' + Math.round(this.player.y) +
+        ' 地下室=' + !!this.player.inBasement + ' 攻击冷却=' + (this.player.atkCd || 0).toFixed(2);
+  };
 };
