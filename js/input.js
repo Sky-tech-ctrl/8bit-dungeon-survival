@@ -188,6 +188,9 @@ Game.prototype.setupInput = function() {
     return '';
   }
 
+  // 诊断面板要用同一套降级逻辑，挂到实例上
+  this._normCode = normCode;
+
   // 松开所有按键。
   // 必须在窗口失焦时调用：按住 A 的同时 Alt-Tab 切走，keyup 事件是收不到的，
   // KeyA 会永久卡在 true。再配合移动逻辑里的方向抵消，卡住的键至多让人物
@@ -200,8 +203,6 @@ Game.prototype.setupInput = function() {
   };
 
   window.addEventListener('keydown', (e) => {
-    this._dbgKey && this._dbgKey(e);          // F2 诊断面板（默认关闭）
-
     // 焦点在输入框里时（登录框、游戏心得）键盘归输入框，游戏不抢
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
@@ -498,7 +499,14 @@ Game.prototype.warnIME = function() {
   this.log('输入法正在拦截字母键 —— 按 Shift 切到英文模式（或用方向键+空格操作）', '#fc6');
 };
 
-// ---- F2：按键诊断面板 ----
+// ---- 按键诊断面板 ----
+// 第一版是「显示最近一次按键」，但那个设计有个致命缺陷：
+// 面板只在收到 keydown 时才刷新 —— 而要查的恰恰是「收不到的那个键」。
+// 按下去面板纹丝不动，玩家看到的只是一片空白，什么也说明不了。
+//
+// 所以改成清单式：把每个控制键都列出来，按到过就打勾。
+// 玩家把键盘上这几个键挨个按一遍，没被勾上的就是从未送达的 ——
+// 这个判断不需要故障键自己能用。
 Game.prototype.toggleKeyDebug = function() {
   // 按钮文案的同步放在这里，而不是放在按钮的点击回调里 ——
   // 面板还能用反引号开关，写在回调里的话，用键盘切换一次文案就对不上了。
@@ -508,42 +516,88 @@ Game.prototype.toggleKeyDebug = function() {
   };
 
   let box = document.getElementById('keyDebug');
-  if (box) {                       // 再切一次关掉
+  if (box) {                                   // 再切一次关掉
     box.remove();
-    this._dbgKey = null;
+    if (this._dbgOff) this._dbgOff();
+    this._dbgOff = null;
     syncBtn();
     return;
   }
+
   box = document.createElement('div');
   box.id = 'keyDebug';
   box.style.cssText =
-    'position:fixed;left:8px;bottom:8px;z-index:100001;background:rgba(8,8,16,.92);' +
-    'color:#8f8;font:12px/1.7 Consolas,monospace;padding:10px 12px;border:2px solid #4a4a6a;' +
-    'border-radius:8px;white-space:pre;pointer-events:none;max-width:92vw';
-  box.textContent = '按键诊断已开启（再按 F2 关闭）\n请按下没反应的键…';
+    'position:fixed;left:8px;bottom:8px;z-index:100001;background:rgba(8,8,16,.94);' +
+    'color:#9fe;font:12px/1.65 Consolas,monospace;padding:10px 14px;border:2px solid #4a4a6a;' +
+    'border-radius:8px;white-space:pre;pointer-events:none;max-width:94vw';
   document.body.appendChild(box);
   syncBtn();
 
-  this._dbgKey = (e) => {
-    const held = Object.entries(this.input.keys).filter(([, v]) => v).map(([k]) => k);
-    box.textContent =
-      '按键诊断  (F2 关闭)\n' +
-      '─────────────────────────────\n' +
-      'code        : ' + (e.code || '(空)') + '\n' +
-      'key         : ' + JSON.stringify(e.key) + '\n' +
-      'keyCode     : ' + (e.keyCode || e.which || 0) +
-        ((e.keyCode === 229) ? '   ← 输入法正在拦截！' : '') + '\n' +
-      'isComposing : ' + !!e.isComposing + '\n' +
-      '修饰键      : ' + [e.ctrlKey && 'Ctrl', e.altKey && 'Alt',
-                           e.shiftKey && 'Shift', e.metaKey && 'Meta']
-                           .filter(Boolean).join('+') + '\n' +
-      '事件目标    : ' + ((e.target && e.target.tagName) || '?') +
-        (e.target && e.target.id ? '#' + e.target.id : '') + '\n' +
-      '─────────────────────────────\n' +
-      '当前按住    : ' + (held.length ? held.join(' ') : '(无)') + '\n' +
-      '游戏状态    : running=' + this.running + ' paused=' + this.paused +
-        ' gameOver=' + this.gameOver + '\n' +
-      '玩家        : x=' + Math.round(this.player.x) + ' y=' + Math.round(this.player.y) +
-        ' 地下室=' + !!this.player.inBasement + ' 攻击冷却=' + (this.player.atkCd || 0).toFixed(2);
+  const WATCH = [
+    ['移动', [['KeyW', 'W'], ['KeyA', 'A'], ['KeyS', 'S'], ['KeyD', 'D']]],
+    ['方向', [['ArrowUp', '↑'], ['ArrowLeft', '←'], ['ArrowDown', '↓'], ['ArrowRight', '→']]],
+    ['攻击', [['Space', '空格'], ['KeyJ', 'J']]],
+  ];
+  const seen = Object.create(null);
+  const recent = [];
+  let last = null;
+
+  const norm = (e) => (this._normCode ? this._normCode(e) : (e.code || ''));
+
+  const render = () => {
+    let s = '按键诊断        关闭：` 或暂停面板\n';
+    s += '────────────────────────────────────\n';
+    s += '把下面每个键都按一遍，看谁没被勾上：\n';
+    for (const [label, keys] of WATCH) {
+      s += '  ' + label + '  ' +
+        keys.map(([code, name]) => name + (seen[code] ? ' ✓' : ' ✗')).join('   ') + '\n';
+    }
+    const missing = [];
+    for (const [, keys] of WATCH) for (const [code, name] of keys) if (!seen[code]) missing.push(name);
+    s += '────────────────────────────────────\n';
+    if (missing.length === 0) {
+      s += '全部收到 —— 事件都进了页面。\n若人物仍不动，问题在游戏逻辑，请截图给我。\n';
+    } else {
+      s += '未收到：' + missing.join(' ') + '\n';
+      s += '（按过却仍是 ✗ = 事件根本没进页面，\n';
+      s += '  被浏览器 / 输入法 / 系统快捷键吃掉了）\n';
+    }
+    s += '────────────────────────────────────\n';
+    if (last) {
+      s += '最近一次  code=' + (last.code || '(空)') + '  key=' + JSON.stringify(last.key) +
+           '  keyCode=' + last.keyCode + (last.keyCode === 229 ? ' ←输入法拦截' : '') + '\n';
+      s += '          修饰键=' + (last.mods || '(无)') +
+           '  isComposing=' + last.composing + '  目标=' + last.target + '\n';
+    } else {
+      s += '最近一次  （还没收到任何按键）\n';
+    }
+    s += '最近按键  ' + (recent.length ? recent.join(' ') : '(无)');
+    box.textContent = s;
   };
+
+  const onKey = (e) => {
+    const code = norm(e);
+    if (code) {
+      seen[code] = true;
+      recent.push(code);
+      if (recent.length > 10) recent.shift();
+    }
+    last = {
+      code: e.code,
+      key: e.key,
+      keyCode: e.keyCode || e.which || 0,
+      composing: !!e.isComposing,
+      target: ((e.target && e.target.tagName) || '?') +
+              (e.target && e.target.id ? '#' + e.target.id : ''),
+      mods: [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Meta']
+              .filter(Boolean).join('+'),
+    };
+    render();
+  };
+
+  // 挂在捕获阶段：这是页面上最早能拿到键盘事件的位置。
+  // 如果连这里都收不到，就说明事件压根没进页面，而不是被页面里的某段代码吞了。
+  window.addEventListener('keydown', onKey, true);
+  this._dbgOff = () => window.removeEventListener('keydown', onKey, true);
+  render();
 };
