@@ -11,6 +11,7 @@ Game.prototype.render = function() {
   }
   this.drawSky(ctx);
   this.drawGround(ctx);
+  this.drawSurfaceHoles(ctx);
   this.drawDoor(ctx);
 
   // 野生资源堆（在丧尸前）
@@ -23,10 +24,14 @@ Game.prototype.render = function() {
 
   // 地下室
   this.drawBasement(ctx);
+  this.drawHoleShafts(ctx);
   this.drawBuildPreview(ctx);
 
   // 玩家（最上层，除了粒子）
   if (this.player.hp > 0) this.drawPlayer(ctx, this.player);
+
+  // 自然灾害特效
+  this.drawDisasterFX(ctx);
 
   // 粒子
   for (const p of this.particles) {
@@ -34,6 +39,58 @@ Game.prototype.render = function() {
     ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
   }
   ctx.restore();
+};
+
+// ---- 地表破口 ----
+// 天灾砸穿地表后要做两件事，而且必须分两个时机做：
+//   1. 地表层（drawGround 之后）：把草皮和泥土抠掉。
+//      不能用 clearRect —— 那露出的是页面黑底而不是天空。
+//      正确做法是把天空按破口形状裁剪后重绘一遍，颜色才对得上。
+//   2. 地下室层（drawBasement 之后）：补一段向下的竖井。
+//      地下室是整块重填的，早画会被盖掉。
+Game.prototype.drawSurfaceHoles = function(ctx) {
+  if (!this.surface) return;
+  for (let c = 0; c < BASEMENT_COLS; c++) {
+    if (this.surface[c]) continue;
+    const x = c * TILE;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, GROUND_Y - 14, TILE, 14);
+    ctx.clip();
+    this.drawSky(ctx);                     // 按破口形状把天空补回去
+    ctx.restore();
+    // 破口两侧的断茬，做出「被砸烂」而不是「被橡皮擦擦掉」的感觉
+    ctx.fillStyle = COL.dirtDark;
+    for (let k = 0; k < 5; k++) {
+      const h = 3 + ((c * 7 + k * 13) % 6);
+      ctx.fillRect(x - 3, GROUND_Y - 12 + k * 3, 4, h);
+      ctx.fillRect(x + TILE - 1, GROUND_Y - 12 + k * 3, 4, h);
+    }
+    ctx.fillStyle = COL.grassDark;
+    ctx.fillRect(x - 3, GROUND_Y - 13, 4, 3);
+    ctx.fillRect(x + TILE - 1, GROUND_Y - 13, 4, 3);
+  }
+};
+
+// ---- 破口向下的竖井（必须在 drawBasement 之后画）----
+Game.prototype.drawHoleShafts = function(ctx) {
+  if (!this.surface) return;
+  for (let c = 0; c < BASEMENT_COLS; c++) {
+    if (this.surface[c]) continue;
+    const x = c * TILE;
+    // 一格深的敞口，越往下越暗
+    for (let k = 0; k < TILE; k++) {
+      const a = 0.75 - k / TILE * 0.45;
+      ctx.fillStyle = `rgba(0,0,0,${a.toFixed(3)})`;
+      ctx.fillRect(x, GROUND_Y + k, TILE, 1);
+    }
+    // 边缘碎石
+    ctx.fillStyle = COL.stoneDark;
+    for (let k = 0; k < 4; k++) {
+      ctx.fillRect(x, GROUND_Y + k * 6, 3, 4);
+      ctx.fillRect(x + TILE - 3, GROUND_Y + 3 + k * 6, 3, 4);
+    }
+  }
 };
 
 // ---- 天空 ----
@@ -334,10 +391,40 @@ Game.prototype.drawBasement = function(ctx) {
   }
 
   // ========== 5. 所有房间（带墙体 + 门口缺口） ==========
-  for (const r of this.rooms) this.drawRoom(ctx, r);
+  for (const r of this.rooms) {
+    this.drawRoom(ctx, r);
+    this.drawRoomHealth(ctx, r);
+  }
 };
 
 // ---- 房间（墙体 + 门口缺口 + 地板 + 内饰） ----
+// ---- 房间耐久：只在受损时才画，满血的房间不该顶着一条绿条 ----
+Game.prototype.drawRoomHealth = function(ctx, room) {
+  if (room.hp == null || room.maxHp == null) return;
+  const x = room.col * TILE;
+  const y = GROUND_Y + room.row * TILE;
+  const w = room.size.w * TILE;
+
+  if (room.hitFlash > 0) {                     // 被砸中的一瞬间整间泛红
+    ctx.fillStyle = `rgba(255,60,60,${(room.hitFlash * 0.45).toFixed(3)})`;
+    ctx.fillRect(x, y, w, room.size.h * TILE);
+  }
+  if (room.hp >= room.maxHp) return;
+
+  const ratio = Math.max(0, room.hp / room.maxHp);
+  ctx.fillStyle = '#300';
+  ctx.fillRect(x + 2, y + 2, w - 4, 4);
+  ctx.fillStyle = ratio > 0.5 ? '#5f5' : ratio > 0.25 ? '#fc4' : '#f55';
+  ctx.fillRect(x + 2, y + 2, (w - 4) * ratio, 4);
+
+  // 裸露的房间加一圈警示边框：这是玩家最需要立刻看到的信息
+  if (this.isHole && this.isHole(room.col)) {
+    ctx.strokeStyle = 'rgba(255,80,60,0.85)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, w - 2, room.size.h * TILE - 2);
+  }
+};
+
 Game.prototype.drawRoom = function(ctx, room) {
   const td = room.typeData;
   const size = td.size;
@@ -971,6 +1058,42 @@ Game.prototype.drawZombie = function(ctx, z) {
     const bw = 30 * scale;
     ctx.fillStyle = '#400'; ctx.fillRect(z.x-bw/2, z.y-36*scale, bw, 4);
     ctx.fillStyle = COL.red; ctx.fillRect(z.x-bw/2, z.y-36*scale, bw*(z.hp/z.maxHp), 4);
+  }
+};
+
+// ---- 自然灾害特效 ----
+Game.prototype.drawDisasterFX = function(ctx) {
+  const d = this.disaster;
+  if (!d) return;
+
+  // 即将降临时整块地表泛红脉动 —— 给玩家最后几秒的心理准备
+  if (d.next && d.timer <= 4 && d.timer > 0) {
+    const pulse = 0.18 + 0.14 * Math.sin(performance.now() / 90);
+    ctx.fillStyle = `rgba(255,60,30,${pulse})`;
+    ctx.fillRect(0, 0, W, GROUND_Y);
+    // 落点标记
+    const t = DISASTER_TYPES[d.next.kind];
+    const x = d.next.col * TILE;
+    ctx.fillStyle = t.color;
+    for (let k = 0; k < 3; k++) ctx.fillRect(x + 4 + k * 12, GROUND_Y - 16 - k * 4, 6, 3);
+  }
+
+  for (const e of d.effects) {
+    if (e.kind === 'crater') {
+      const a = Math.min(1, e.t);
+      ctx.fillStyle = `rgba(255,140,60,${a * 0.7})`;
+      const r = (1.6 - e.t) * 90;
+      ctx.fillRect(e.x - r / 2, GROUND_Y - 8, r, 12);
+    } else if (e.kind === 'lava') {
+      ctx.fillStyle = e.t > 0.6 ? '#ff6622' : '#aa2200';
+      ctx.fillRect(Math.floor(e.x), Math.floor(e.y), 4, 6);
+      ctx.fillStyle = '#ffcc44';
+      ctx.fillRect(Math.floor(e.x) + 1, Math.floor(e.y), 2, 2);
+    } else if (e.kind === 'quake') {
+      // 地震：地下室整体压一层土黄，配合屏幕抖动
+      ctx.fillStyle = `rgba(201,162,39,${0.10 * Math.min(1, e.t)})`;
+      ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+    }
   }
 };
 

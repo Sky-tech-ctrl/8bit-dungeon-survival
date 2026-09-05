@@ -313,6 +313,20 @@ class Game {
     this.doorMaxHp = 100;
     // 开发者模式的开关。刻意放在 reset 里一并清掉 —— 换局不该带着作弊状态
     this.dev = { god: false, doorGod: false, infiniteRes: false };
+
+    // 地表完整度：每列一个布尔值。被天灾砸穿后变 false，
+    // 那一列下方的房间就「裸露」，丧尸会直接跳下去啃它。
+    this.surface = new Array(BASEMENT_COLS).fill(true);
+    this.hasForecast = false;          // 是否已建天气预报站
+
+    // 灾害系统。主线前几关不开（见 beginCampaignLevel）
+    if (!this.disaster) this.disaster = new DisasterSystem(this);
+    else this.disaster.reset();
+
+    // 主线模式：mode 为 'campaign' 时才生效，level 从 1 起
+    this.mode = this.mode || 'endless';
+    this.campaignLevel = this.campaignLevel || 1;
+    this.levelCleared = false;
     this._devClicks = 0;
     this._devClickAt = 0;
 
@@ -527,6 +541,7 @@ class Game {
 
     for (const [key, t] of Object.entries(ROOM_TYPES)) {
       if (key === 'command') continue;
+      if (!this.isRoomUnlocked(key)) continue;      // 主线模式：未解锁的不出现在菜单里
       const size = t.size;
       const startCol = (size.w === 2 && col % 2 === 1) ? col - 1 : col;
       // 对于 1-wide 房间：直接建在点击的那格
@@ -609,6 +624,11 @@ class Game {
   // ==================== 建造系统 ====================
   tryBuild(typeKey, col, row) {
     const type = ROOM_TYPES[typeKey];
+    if (!this.isRoomUnlocked(typeKey)) {
+      Sound.sfx('error');
+      this.log(`${type.name} 尚未解锁`, '#f55');
+      return false;
+    }
     const size = type.size;
     if (col<0||row<0||col+size.w>BASEMENT_COLS||row+size.h>BASEMENT_ROWS) return false;
     if (type.unique && this.rooms.some(r => r.type === typeKey)) {
@@ -636,7 +656,12 @@ class Game {
     const type = ROOM_TYPES[typeKey];
     const size = type.size;
     const id = ++this.roomIdCounter;
-    const room = { id, type: typeKey, col, row, size, typeData: type, produceTimer: 0, useCd: 0 };
+    const room = { id, type: typeKey, col, row, size, typeData: type, produceTimer: 0, useCd: 0,
+                   hp: this.roomMaxHp(typeKey), maxHp: this.roomMaxHp(typeKey), hitFlash: 0 };
+    // 混凝土块建在最上面一排时，顺手把这一列的地表补上 —— 这就是它存在的意义
+    if (typeKey === 'concrete' && row === 0) {
+      for (let dc = 0; dc < size.w; dc++) this.patchSurface(col + dc);
+    }
     this.rooms.push(room);
     for (let dc=0;dc<size.w;dc++) for (let dr=0;dr<size.h;dr++)
       this.grid[col+dc][row+dr] = id;
@@ -645,6 +670,7 @@ class Game {
   }
 
   applyRoomEffects() {
+    this.hasForecast = this.rooms.some(r => r.typeData.effect && r.typeData.effect.forecast);
     this.atkBonus = 0;
     this.capacity = { gold:500, food:300, power:200 };
     this.traps = [];
@@ -887,6 +913,12 @@ class Game {
       if (c.x + c.w < -50) { c.x = W + 50; c.y = 20 + Math.random()*60; }
     }
 
+    // 裸露房间每帧算一次就够了 —— 每只丧尸各算一遍是平方级的浪费
+    this._exposedCache = this.exposedTargets();
+
+    // ===== 自然灾害 =====
+    if (this.disaster) this.disaster.update(dt);
+
     // ===== 玩家更新 =====
     this.updatePlayer(dt);
 
@@ -911,6 +943,7 @@ class Game {
 
     // 房间产出 + 手动功能冷却
     for (const r of this.rooms) {
+      if (r.hitFlash > 0) r.hitFlash = Math.max(0, r.hitFlash - dt * 3);
       if (r.useCd > 0) r.useCd = Math.max(0, r.useCd - dt);
       const p = r.typeData.produce;
       if (!p) continue;
@@ -935,9 +968,25 @@ class Game {
       // 优先攻击玩家（如果玩家在陆地且距离近）
       let targetX = DOOR_X;
       let targetKind = 'door';
+      let targetRoom = null;
+
+      // 地表被砸穿之后，破口下的房间就成了更近、更软的目标 ——
+      // 丧尸没有理由绕过一个敞口去撞结实的大门。
+      // 只在破口比大门更近时才改道，否则整群丧尸会为了一个远处的破口横穿全场。
+      const holes = this._exposedCache;
+      if (holes && holes.length) {
+        let best = null, bestD = Math.abs(DOOR_X - z.x);
+        for (const h of holes) {
+          const hx = h.col * TILE + TILE / 2;
+          const d = Math.abs(hx - z.x);
+          if (d < bestD) { bestD = d; best = h; }
+        }
+        if (best) { targetX = best.col * TILE + TILE / 2; targetKind = 'room'; targetRoom = best.room; }
+      }
+
       if (!this.player.inBasement && this.player.hp > 0) {
         const pd = Math.abs(z.x - this.player.x);
-        if (pd < 80) { targetX = this.player.x; targetKind = 'player'; }
+        if (pd < 80) { targetX = this.player.x; targetKind = 'player'; targetRoom = null; }
       }
       const dx = targetX - z.x;
       const dist = Math.abs(dx);
@@ -950,7 +999,11 @@ class Game {
         z.attackCd -= dt;
         if (z.attackCd <= 0) {
           z.attackCd = z.attackInterval;
-          if (targetKind === 'door') {
+          if (targetKind === 'room' && targetRoom && !targetRoom.dead) {
+            this.damageRoom(targetRoom, z.damage);
+            Sound.sfx('doorHit');
+            this.shakeScreen();
+          } else if (targetKind === 'door') {
             if (!(this.dev && this.dev.doorGod)) this.doorHp -= z.damage;
             Sound.sfx('doorHit');
             this.shakeScreen();
@@ -1260,6 +1313,173 @@ class Game {
   // ==================== 波次系统 ====================
   shakeScreen() { this.shakeT = 0.6; }
 
+  // ==================== 主线模式 ====================
+
+  /** 当前模式下允许建造的房间集合。无尽模式全开。 */
+  unlockedRooms() {
+    if (this.mode !== 'campaign') return null;      // null = 不限制
+    const set = new Set(CAMPAIGN_BASE_ROOMS);
+    for (let i = 0; i < Math.min(this.campaignLevel, CAMPAIGN.length); i++) {
+      set.add(CAMPAIGN[i].unlock);
+    }
+    return set;
+  }
+
+  isRoomUnlocked(key) {
+    const set = this.unlockedRooms();
+    return !set || set.has(key);
+  }
+
+  /** 进入某一关：重置局面、设定通关波数、决定要不要开天灾。 */
+  beginCampaignLevel(level) {
+    this.mode = 'campaign';
+    this.campaignLevel = Math.max(1, Math.min(CAMPAIGN.length, level));
+    this.reset();
+    this.mode = 'campaign';
+    this.campaignLevel = Math.max(1, Math.min(CAMPAIGN.length, level));
+    const cfg = CAMPAIGN[this.campaignLevel - 1];
+    this.levelTargetWaves = cfg.waves;
+    this.levelCleared = false;
+    // 天灾从第 CAMPAIGN_DISASTER_FROM 关才登场：前几关要先让玩家学会基本循环
+    this.disaster.enable(this.campaignLevel >= CAMPAIGN_DISASTER_FROM);
+    this.log(`第 ${this.campaignLevel} 关 · ${cfg.name} —— ${cfg.desc}`, '#ffd700');
+  }
+
+  /** 每波结束后判断是否通关。 */
+  checkCampaignClear() {
+    if (this.mode !== 'campaign' || this.levelCleared) return;
+    if (this.wave < this.levelTargetWaves) return;
+    this.levelCleared = true;
+    const cfg = CAMPAIGN[this.campaignLevel - 1];
+    const next = this.campaignLevel + 1;
+    if (window.CampaignUI) CampaignUI.onLevelCleared(this.campaignLevel, cfg, next <= CAMPAIGN.length);
+    Sound.sfx('upgrade');
+    this.running = false;
+  }
+
+  // ==================== 地形破坏 ====================
+
+  /** 砸穿某一列的地表。返回是否真的造成了新破口。 */
+  breakSurface(col) {
+    if (col < 0 || col >= BASEMENT_COLS) return false;
+    if (!this.surface[col]) return false;
+    this.surface[col] = false;
+    this.spawnParticles(col * TILE + TILE / 2, GROUND_Y, COL.dirt, 8);
+    // 只在本波第一次砸穿时提示一次，免得一场天灾刷十行同样的话
+    if (!this._holeHintAt || Date.now() - this._holeHintAt > 8000) {
+      this._holeHintAt = Date.now();
+      const c = ROOM_TYPES.concrete.cost;
+      this.log(`地面被砸穿！点击缺口可用混凝土修补（${c.gold}◉）`, '#9cf');
+    }
+    return true;
+  }
+
+  /**
+   * 直接点击地表缺口来修补。
+   *
+   * 为什么不做成「在 row 0 建一个混凝土房间」：地表被砸穿时，那一列的
+   * row 0 往往正被别的房间占着 —— 房间还活着，格子却不空，玩家就永远
+   * 补不上这个洞，只能眼睁睁看它被啃穿。修补本来就是地表层的动作，
+   * 不该跟地下室的格子抢位置。
+   */
+  patchHoleAt(col) {
+    if (!this.isHole(col)) return false;
+    const cost = ROOM_TYPES.concrete.cost;
+    if (!this.canAfford(cost)) {
+      Sound.sfx('error');
+      this.log('资源不足，无法修补地面', '#f55');
+      return false;
+    }
+    this.pay(cost);
+    this.patchSurface(col);
+    Sound.sfx('build');
+    this.spawnParticles(col * TILE + TILE / 2, GROUND_Y - 6, COL.stoneLight, 10);
+    this.updateUI();
+    return true;
+  }
+
+  /** 修补地表（混凝土块建成时调用）。 */
+  patchSurface(col) {
+    if (col < 0 || col >= BASEMENT_COLS) return false;
+    if (this.surface[col]) return false;
+    this.surface[col] = true;
+    this.log(`⬛ 第 ${col} 列地面已修补`, '#9cf');
+    return true;
+  }
+
+  /** 某一列是否破口 —— 丧尸判断能不能从这里下去。 */
+  isHole(col) {
+    return col >= 0 && col < BASEMENT_COLS && !this.surface[col];
+  }
+
+  // ==================== 房间耐久 ====================
+
+  roomMaxHp(typeKey) {
+    return ROOM_HP[typeKey] != null ? ROOM_HP[typeKey] : ROOM_HP._default;
+  }
+
+  damageRoom(room, dmg) {
+    if (!room || room.dead) return;
+    room.hp = (room.hp != null ? room.hp : this.roomMaxHp(room.type)) - dmg;
+    room.hitFlash = 1;
+    const cx = (room.col + room.size.w / 2) * TILE;
+    const cy = GROUND_Y + (room.row + room.size.h / 2) * TILE;
+    this.spawnParticles(cx, cy, COL.red, 6);
+    if (room.hp <= 0) this.destroyRoom(room);
+  }
+
+  /** 砸掉某一列最上面 depth 层里的房间。天灾用。 */
+  damageRoomsInColumn(col, dmg, depth) {
+    for (const r of this.rooms.slice()) {
+      if (col < r.col || col >= r.col + r.size.w) continue;
+      if (r.row >= depth) continue;
+      this.damageRoom(r, dmg);
+    }
+  }
+
+  destroyRoom(room) {
+    if (room.dead) return;
+    room.dead = true;
+    for (let dc = 0; dc < room.size.w; dc++) {
+      for (let dr = 0; dr < room.size.h; dr++) {
+        const c = room.col + dc, r = room.row + dr;
+        if (this.grid[c] && this.grid[c][r] !== undefined) this.grid[c][r] = null;
+      }
+    }
+    const i = this.rooms.indexOf(room);
+    if (i >= 0) this.rooms.splice(i, 1);
+    this.log(`💥 ${room.typeData.name} 被摧毁！`, '#f66');
+    Sound.sfx('zombieDie');
+    this.spawnParticles((room.col + room.size.w / 2) * TILE,
+                        GROUND_Y + (room.row + room.size.h / 2) * TILE, COL.stoneLight, 14);
+    this.applyRoomEffects();
+  }
+
+  /** 找出某一列破口下方、最靠上的那个房间 —— 丧尸从破口跳下去要啃的目标。 */
+  exposedRoomAt(col) {
+    if (!this.isHole(col)) return null;
+    let best = null;
+    for (const r of this.rooms) {
+      if (col < r.col || col >= r.col + r.size.w) continue;
+      if (!best || r.row < best.row) best = r;
+    }
+    return best;
+  }
+
+  /** 场上所有裸露房间（供丧尸选目标）。 */
+  exposedTargets() {
+    const out = [];
+    const seen = new Set();
+    for (let c = 0; c < BASEMENT_COLS; c++) {
+      const r = this.exposedRoomAt(c);
+      // 去重要比的是房间本身。原来写的是 out.includes(r)，
+      // 而 out 里装的是 {col, room} 包装对象，永远不相等 ——
+      // 一个横跨两个破口的 2 格房间会被登记两次。
+      if (r && !seen.has(r)) { seen.add(r); out.push({ col: c, room: r }); }
+    }
+    return out;
+  }
+
   // ---- 开发者模式入口：连点地窖门 7 次 ----
   // 用「连续」而不是「累计」：两次点击间隔超过 2.5 秒就重新计数，
   // 否则玩家在正常游戏里零散点到门，攒着攒着就会莫名其妙弹出调试面板。
@@ -1290,6 +1510,12 @@ class Game {
 
   startWave() {
     Sound.sfx('waveStart');
+    // 无尽模式没有 beginCampaignLevel 那道开关，天灾要在这里自己开。
+    // 同样留前三波的缓冲：一上来就砸，玩家还没摸清基本循环就被劝退了。
+    if (this.mode !== 'campaign' && this.disaster && !this.disaster.enabled && this.wave >= 3) {
+      this.disaster.enable(true);
+      this.log('⚠ 气象异常 —— 自然灾害开始出现', '#fc6');
+    }
     this.wave++;
     this.waveActive = true;
     this.waveZombieQueue = 5 + this.wave * 3 + Math.floor(this.wave*this.wave*0.3);
@@ -1315,6 +1541,8 @@ class Game {
 
   endWave() {
     Sound.sfx('waveClear');
+    // 判定放在这里而不是 startWave：必须打完最后一波、场上清空才算守住
+    setTimeout(() => this.checkCampaignClear(), 0);
     this.waveActive = false;
     this.nextWaveTimer = 20 + this.wave * 2;
     const bonus = 20 + this.wave * 10;
@@ -1446,6 +1674,28 @@ class Game {
     setHud('powerCapTxt', this.capacity.power);
     setHud('killTxt', this.kills);
     setHud('doorHpTxt', `${Math.max(0,Math.ceil(this.doorHp))}/${this.doorMaxHp}`);
+
+    // 关卡指示（仅主线模式）
+    const lvEl = document.getElementById('hudLevel');
+    if (lvEl) {
+      lvEl.textContent = this.mode === 'campaign'
+        ? ` / ${this.levelTargetWaves}　第${this.campaignLevel}关`
+        : '';
+    }
+
+    // 天灾预报。没有预报站时整条隐藏 —— 那正是那个房间要卖的东西
+    const fc = document.getElementById('hudForecast');
+    if (fc) {
+      const f = this.disaster && this.disaster.forecast();
+      if (!f) {
+        fc.classList.add('hidden');
+      } else {
+        fc.classList.remove('hidden');
+        fc.classList.toggle('imminent', f.imminent);
+        fc.style.color = f.color;
+        fc.textContent = `${f.icon} ${f.name} ${f.seconds}s · 第${f.col}列`;
+      }
+    }
     setHud('nextWaveTxt', this.waveActive ? '进行中' : `${Math.ceil(this.nextWaveTimer)}s 后`);
 
     this.updateBuildBtns();

@@ -66,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 顺序要紧：Game 的构造函数会跑 setupAuth()，把 _showAuth / _showSave
   // 暴露出来，标题界面要用它们，所以必须先建 Game 再 init 标题界面。
   game = new Game();
+  if (window.CampaignUI) CampaignUI.init(game);
   if (window.TitleScreen) TitleScreen.init(game);
 
   guardDoubleTapZoom();

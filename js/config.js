@@ -172,8 +172,49 @@ const ROOM_TYPES = {
     color: '#7a7a7a', colorDark: '#4a4a4a',
     size: {w:1,h:1},
     effect: null
+  },
+  weather: {
+    name: '天气预报站', icon: '📡',
+    cost: {gold:140, power:30}, desc: 'HUD 上预告即将到来的自然灾害',
+    color: '#4ad0d0', colorDark: '#1a8a8a',
+    size: {w:2,h:1}, unique: true,
+    effect: {forecast: true}
+  },
+  concrete: {
+    name: '混凝土块', icon: '⬛',
+    cost: {gold:35}, desc: '填在地表被砸穿的缺口上，修补地面',
+    color: '#9a9a9a', colorDark: '#5a5a5a',
+    size: {w:1,h:1},
+    effect: {patch: true}
   }
 };
+
+// 房间耐久：灾害和裸露后被丧尸攻击时要扣的血。
+// 加固墙和混凝土块是拿来挡伤害的，自然要硬得多。
+const ROOM_HP = { wall: 160, concrete: 220, command: 200, _default: 90 };
+
+// ==================== 主线模式：十关，每关解锁一种房间 ====================
+// 设计意图：第一关只有金矿，玩家被迫先理解「攒钱」这一件事；
+// 之后每关只多一个新东西，学习曲线才不会一上来就糊一脸。
+// 加固墙与混凝土块从头就有 —— 它们是应对灾害的基础手段，不该锁。
+const CAMPAIGN = [
+  { waves: 3,  unlock: 'goldmine',   name: '掘金',   desc: '守住 3 波。解锁金矿 —— 一切的起点' },
+  { waves: 4,  unlock: 'farm',       name: '口粮',   desc: '守住 4 波。解锁农田' },
+  { waves: 5,  unlock: 'warehouse',  name: '囤积',   desc: '守住 5 波。解锁仓库，资源上限提升' },
+  { waves: 6,  unlock: 'powerplant', name: '通电',   desc: '守住 6 波。解锁发电站。天灾自此开始出现' },
+  { waves: 7,  unlock: 'barracks',   name: '征兵',   desc: '守住 7 波。解锁兵营，士兵替你守地面' },
+  { waves: 8,  unlock: 'infirmary',  name: '救护',   desc: '守住 8 波。解锁医疗室' },
+  { waves: 9,  unlock: 'armory',     name: '军械',   desc: '守住 9 波。解锁武器库' },
+  { waves: 10, unlock: 'trap',       name: '机关',   desc: '守住 10 波。解锁陷阱室' },
+  { waves: 11, unlock: 'blacksmith', name: '锻造',   desc: '守住 11 波。解锁铁匠铺，可升级装备' },
+  { waves: 12, unlock: 'weather',    name: '天象',   desc: '守住 12 波。解锁天气预报站，天灾不再突然' },
+];
+
+// 无论第几关都能造的房间
+const CAMPAIGN_BASE_ROOMS = ['wall', 'concrete'];
+
+// 天灾从第几关开始出现（无尽模式则从第 4 波开始）
+const CAMPAIGN_DISASTER_FROM = 4;
 
 // ==================== 手动使用房间功能定义 ====================
 const ROOM_USE = {
@@ -241,5 +282,13 @@ const ROOM_USE = {
     cd: 6
   },
   blacksmith: null,  // 升级面板
-  wall: null
+  wall: null,
+  concrete: null,
+  weather: {
+    label: '📡 深度扫描',
+    desc: '消耗 8 电力，立刻推算出下一次天灾的类型与落点',
+    cost: { power: 8 },
+    effect: (g) => { if (g.disaster) g.disaster.revealNext(); },
+    cd: 12
+  }
 };

@@ -295,8 +295,13 @@ Game.prototype.setupInput = function() {
       // 点击地下室格子 → 弹出建造菜单或房间功能面板
       this.showBuildPopup(col, row);
     } else {
-      // 点击陆地 → 关闭建造菜单
-      this.hideBuildPopup();
+      // 点击地表：踩到天灾砸出的缺口就直接修补，否则只是关掉建造菜单
+      const col = Math.floor(mx / TILE);
+      if (this.isHole(col)) {
+        this.patchHoleAt(col);
+      } else {
+        this.hideBuildPopup();
+      }
     }
   };
 

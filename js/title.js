@@ -95,12 +95,15 @@ const TitleScreen = (() => {
   // -------------------------------------------------------- 三个选项
 
   async function onNewGame() {
-    if (await AuthAPI.isLoggedIn()) {
-      hide();
-      game._showSave('new');
+    if (!(await AuthAPI.isLoggedIn())) { hide(); game._showAuth('new'); return; }
+    hide();
+    // 石碑只有三个选项槽（美术就是按三个画的），所以主线入口不新开一格，
+    // 而是把「开始新游戏」做成一次模式选择。
+    if (window.CampaignUI) {
+      CampaignUI.init(game);
+      CampaignUI.askMode(() => game._showSave('new'));
     } else {
-      hide();
-      game._showAuth('new');
+      game._showSave('new');
     }
   }
 

@@ -9,7 +9,7 @@
 <meta name="robots" content="noarchive">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='56'%3E🎮%3C/text%3E%3C/svg%3E" type="image/svg+xml">
 <title>8-BIT 地牢求生</title>
-<link rel="stylesheet" href="css/style.css?v=43">
+<link rel="stylesheet" href="css/style.css?v=44">
 <link rel="stylesheet" href="css/title.css?v=3">
 <style>
 /* ======== 登录/注册 & 存档 模态框 ======== */
@@ -156,7 +156,9 @@
   <!-- 极简 HUD：左上=波数，右上=武器等级+耐久，中间=暂停按钮，无黑底 -->
   <div id="hud">
     <div id="hudLeft">
-      <div id="hudWave">第 <span id="waveTxt">1</span> 波</div>
+      <div id="hudWave">第 <span id="waveTxt">1</span> 波<span id="hudLevel"></span></div>
+      <!-- 天灾预报：只有建了天气预报站才会有内容 -->
+      <div id="hudForecast" class="hidden"></div>
       <div id="hudRes">
         <span style="color:#ffd700">◉</span><span id="goldTxt">0</span>
         <span style="color:#5f5">♥</span><span id="foodTxt">0</span>
@@ -266,16 +268,18 @@
 <div id="tsSpider"><div class="web"></div><img src="assets/title_spider.png?v=2" alt=""></div>
 
 <!-- 按依赖顺序加载脚本：cache_bust 最先执行，保证其余脚本加载前就已清掉旧缓存/SW/IDB -->
-<script src="js/cache_bust.js?v=58"></script>
-<script src="js/config.js?v=58"></script>
-<script src="js/audio.js?v=58"></script>
-<script src="js/users.js?v=58"></script>
-<script src="js/api.js?v=58"></script>
-<script src="js/assets.js?v=58"></script>
-<script src="js/engine.js?v=58"></script>
-<script src="js/render.js?v=58"></script>
-<script src="js/input.js?v=58"></script>
-<script src="js/dev.js?v=58"></script>
-<script src="js/title.js?v=58"></script>
-<script src="js/main.js?v=58"></script></body>
+<script src="js/cache_bust.js?v=62"></script>
+<script src="js/config.js?v=62"></script>
+<script src="js/audio.js?v=62"></script>
+<script src="js/disaster.js?v=62"></script>
+<script src="js/users.js?v=62"></script>
+<script src="js/api.js?v=62"></script>
+<script src="js/assets.js?v=62"></script>
+<script src="js/engine.js?v=62"></script>
+<script src="js/render.js?v=62"></script>
+<script src="js/input.js?v=62"></script>
+<script src="js/dev.js?v=62"></script>
+<script src="js/campaign.js?v=62"></script>
+<script src="js/title.js?v=62"></script>
+<script src="js/main.js?v=62"></script></body>
 </html>
