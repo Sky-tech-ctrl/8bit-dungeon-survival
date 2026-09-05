@@ -232,8 +232,11 @@ Game.prototype.setupInput = function() {
     if (code === 'KeyP' && this.running && !this.gameOver) {
       this.togglePause();
     }
-    // F2：按键诊断面板 —— 排查「某个键没反应」时用
-    if (code === 'F2' || e.key === 'F2') {
+    // 反引号 ` （Esc 下面那个键）：按键诊断面板。
+    // 原来用的是 F2 —— F 区在不少浏览器和笔记本上另有用途，换成反引号，
+    // 它不是任何浏览器快捷键，也是老牌游戏开控制台的习惯键位。
+    // 但这只是顺手的入口，正经入口在暂停面板里那个按钮（鼠标可达）。
+    if (code === 'Backquote' || e.key === '`') {
       e.preventDefault();
       this.toggleKeyDebug();
     }
@@ -342,6 +345,15 @@ Game.prototype.setupInput = function() {
     const slot = this._autoSaveSlot || parseInt(prompt('保存到哪个槽位（1-10）？', '1'));
     if (slot) this.saveToSlot(slot);
   });
+  const keyDebugBtn = document.getElementById('keyDebugBtn');
+  if (keyDebugBtn) keyDebugBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    keyDebugBtn.blur();
+    // 面板本身是 position:fixed，暂停面板关掉后它照样留在屏幕上，
+    // 所以点完可以直接继续游戏，一边玩一边看
+    this.toggleKeyDebug();
+  });
+
   if (quitBtn) quitBtn.addEventListener('click', (e) => {
     e.preventDefault();
     const c = confirm('退出后将回到标题界面。未保存的进度会丢失，确定退出吗？');
@@ -488,10 +500,18 @@ Game.prototype.warnIME = function() {
 
 // ---- F2：按键诊断面板 ----
 Game.prototype.toggleKeyDebug = function() {
+  // 按钮文案的同步放在这里，而不是放在按钮的点击回调里 ——
+  // 面板还能用反引号开关，写在回调里的话，用键盘切换一次文案就对不上了。
+  const syncBtn = () => {
+    const b = document.getElementById('keyDebugBtn');
+    if (b) b.textContent = document.getElementById('keyDebug') ? '🔧 关闭诊断' : '🔧 按键诊断';
+  };
+
   let box = document.getElementById('keyDebug');
-  if (box) {                       // 再按一次关掉
+  if (box) {                       // 再切一次关掉
     box.remove();
     this._dbgKey = null;
+    syncBtn();
     return;
   }
   box = document.createElement('div');
@@ -502,6 +522,7 @@ Game.prototype.toggleKeyDebug = function() {
     'border-radius:8px;white-space:pre;pointer-events:none;max-width:92vw';
   box.textContent = '按键诊断已开启（再按 F2 关闭）\n请按下没反应的键…';
   document.body.appendChild(box);
+  syncBtn();
 
   this._dbgKey = (e) => {
     const held = Object.entries(this.input.keys).filter(([, v]) => v).map(([k]) => k);

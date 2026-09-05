@@ -185,6 +185,9 @@
         <button id="resumeBtn">▶ 继续游戏</button>
         <button id="saveSlotBtn" style="background:#ffd700;color:#1a1a22">💾 保存存档</button>
         <button id="quitBtn" style="background:#5a1f1f;color:#ff9090">↩ 退出到存档界面</button>
+        <!-- 诊断入口必须是鼠标可达的：用键盘快捷键去排查键盘故障，
+             键一旦被浏览器或输入法吃掉，快捷键自己也打不开。 -->
+        <button id="keyDebugBtn" style="background:#243046;color:#9fd">🔧 按键诊断</button>
       </div>
     </div>
   </div>
@@ -261,14 +264,14 @@
 <div id="tsSpider"><div class="web"></div><img src="assets/title_spider.png?v=2" alt=""></div>
 
 <!-- 按依赖顺序加载脚本：cache_bust 最先执行，保证其余脚本加载前就已清掉旧缓存/SW/IDB -->
-<script src="js/cache_bust.js?v=48"></script>
-<script src="js/config.js?v=48"></script>
-<script src="js/users.js?v=48"></script>
-<script src="js/api.js?v=48"></script>
-<script src="js/assets.js?v=48"></script>
-<script src="js/engine.js?v=48"></script>
-<script src="js/render.js?v=48"></script>
-<script src="js/input.js?v=48"></script>
-<script src="js/title.js?v=48"></script>
-<script src="js/main.js?v=48"></script></body>
+<script src="js/cache_bust.js?v=50"></script>
+<script src="js/config.js?v=50"></script>
+<script src="js/users.js?v=50"></script>
+<script src="js/api.js?v=50"></script>
+<script src="js/assets.js?v=50"></script>
+<script src="js/engine.js?v=50"></script>
+<script src="js/render.js?v=50"></script>
+<script src="js/input.js?v=50"></script>
+<script src="js/title.js?v=50"></script>
+<script src="js/main.js?v=50"></script></body>
 </html>
