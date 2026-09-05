@@ -311,6 +311,10 @@ class Game {
 
     this.doorHp = 100;
     this.doorMaxHp = 100;
+    // 开发者模式的开关。刻意放在 reset 里一并清掉 —— 换局不该带着作弊状态
+    this.dev = { god: false, doorGod: false, infiniteRes: false };
+    this._devClicks = 0;
+    this._devClickAt = 0;
 
     this.zombies = [];
     this.soldiers = [];
@@ -590,6 +594,7 @@ class Game {
   }
 
   canAfford(cost) {
+    if (this.dev && this.dev.infiniteRes) return true;
     for (const [k,v] of Object.entries(cost)) {
       if ((this.resources[k]||0) < v) return false;
     }
@@ -597,6 +602,7 @@ class Game {
   }
 
   pay(cost) {
+    if (this.dev && this.dev.infiniteRes) return;
     for (const [k,v] of Object.entries(cost)) this.resources[k] -= v;
   }
 
@@ -945,7 +951,7 @@ class Game {
         if (z.attackCd <= 0) {
           z.attackCd = z.attackInterval;
           if (targetKind === 'door') {
-            this.doorHp -= z.damage;
+            if (!(this.dev && this.dev.doorGod)) this.doorHp -= z.damage;
             Sound.sfx('doorHit');
             this.shakeScreen();
             this.spawnParticles(DOOR_X, GROUND_Y - DOOR_HEIGHT/2, COL.red, 5);
@@ -1179,6 +1185,7 @@ class Game {
   }
 
   damagePlayer(dmg) {
+    if (this.dev && this.dev.god) return;      // 开发者模式：玩家无敌
     Sound.sfx('hurt');
     const p = this.player;
     p.hp -= dmg;
@@ -1252,6 +1259,34 @@ class Game {
 
   // ==================== 波次系统 ====================
   shakeScreen() { this.shakeT = 0.6; }
+
+  // ---- 开发者模式入口：连点地窖门 7 次 ----
+  // 用「连续」而不是「累计」：两次点击间隔超过 2.5 秒就重新计数，
+  // 否则玩家在正常游戏里零散点到门，攒着攒着就会莫名其妙弹出调试面板。
+  registerDoorClick(mx, my) {
+    const inX = Math.abs(mx - DOOR_X) <= DOOR_WIDTH / 2;
+    const inY = my >= GROUND_Y - DOOR_HEIGHT - 8 && my <= GROUND_Y + 8;
+    if (!inX || !inY) return false;
+
+    const now = Date.now();
+    if (now - this._devClickAt > 2500) this._devClicks = 0;
+    this._devClickAt = now;
+    this._devClicks++;
+
+    if (this._devClicks >= 7) {
+      this._devClicks = 0;
+      if (window.DevMode) {
+        DevMode.init(this);
+        DevMode.show();
+        this.log('🛠 开发者模式已解锁', '#d9f');
+        Sound.sfx('upgrade');
+      }
+    } else if (this._devClicks >= 4) {
+      // 前三下不吭声，第四下开始给点反馈，免得点到一半以为没反应
+      this.log(`…${7 - this._devClicks}`, '#a8f');
+    }
+    return true;
+  }
 
   startWave() {
     Sound.sfx('waveStart');

@@ -55,6 +55,80 @@ textarea {
   touch-action: auto;
 }
 
+/* ==================== 开发者模式面板 ==================== */
+/* 刻意不做成模态框：调参的意义就在于边改边看效果，
+   弹个遮罩把画面挡住就本末倒置了。所以是浮在右上角的独立窗口，
+   游戏照常运行。 */
+#devPanel {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 100002;
+  width: 272px;
+  background: rgba(14, 10, 20, .95);
+  border: 2px solid #6a4a8a;
+  border-radius: 8px;
+  color: #e8dcf4;
+  font: 12px/1.5 Consolas, 'Microsoft YaHei', monospace;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .6);
+  user-select: none;
+}
+#devPanel .dev-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 10px;
+  background: #3a2a4a;
+  border-bottom: 1px solid #6a4a8a;
+  border-radius: 6px 6px 0 0;
+  color: #d9a8ff;
+  letter-spacing: 1px;
+}
+#devPanel .dev-head button {
+  background: none; border: none; color: #c9b8d8;
+  font-size: 15px; cursor: pointer; line-height: 1; padding: 0 2px;
+}
+#devPanel .dev-head button:hover { color: #ff8f8f; }
+
+#devPanel .dev-body { padding: 8px 10px; }
+#devPanel .dev-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 6px;
+}
+#devPanel .dev-label { flex: 0 0 58px; color: #b6a8c8; }
+/* 允许换行：「丧尸数量」那行有 输入框+应用+清空+&#43;5 四个控件，
+   不换行会把最后一个挤出面板外 */
+#devPanel .dev-field {
+  display: flex; gap: 4px; flex: 1;
+  justify-content: flex-end; flex-wrap: wrap;
+}
+
+#devPanel input[type=number] {
+  width: 58px; background: #0e0a14; color: #fff;
+  border: 1px solid #5a4a6a; border-radius: 4px;
+  padding: 3px 5px; font: inherit; text-align: right;
+}
+#devPanel input[type=number]:focus { border-color: #b98fe0; outline: none; }
+
+#devPanel button {
+  background: #2a2036; color: #ddd;
+  border: 1px solid #5a4a6a; border-radius: 4px;
+  padding: 3px 6px; font: inherit; cursor: pointer; white-space: nowrap;
+}
+#devPanel button:hover { background: #3d2f4f; border-color: #b98fe0; }
+#devPanel button.dev-on {
+  background: #2a5a3a; border-color: #6ede8f; color: #bfffcf; font-weight: bold;
+}
+
+#devPanel .dev-foot {
+  display: flex; gap: 6px; padding: 0 10px 8px;
+}
+#devPanel .dev-foot button { flex: 1; }
+#devPanel .dev-tip {
+  padding: 0 10px 8px; color: #7a6a8a; font-size: 11px; text-align: center;
+}
+
+/* 手机端整个容器会旋转，浮动面板挂在 body 上不受影响，只需缩一点 */
+body.mobile-mode #devPanel { width: 210px; font-size: 11px; }
+
 /* ==================== 游戏容器 ==================== */
 #gameContainer {
   position: relative;

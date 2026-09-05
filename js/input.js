@@ -286,6 +286,9 @@ Game.prototype.setupInput = function() {
 
   const onClickGame = (mx, my) => {
     if (!this.running || this.gameOver) return;
+    // 地窖门的连击检测要排在最前面。它不吞掉点击 —— 门在地表，
+    // 常规处理只是关掉建造菜单，两者不冲突。
+    this.registerDoorClick(mx, my);
     if (my > GROUND_Y) {
       const col = Math.floor(mx / TILE);
       const row = Math.floor((my - GROUND_Y) / TILE);
